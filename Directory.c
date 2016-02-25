@@ -8,35 +8,17 @@
 #include <errno.h>
 
 
-/*int WORM_mknod(const char *path, mode_t mode, dev_t dev)
-{
-    int returnStatus = 0;
-    char convertedPath[PATH_MAX];
-    
-	LogEnter("WORM_mknod");
-    ConvertPath(convertedPath, path);
-    
-	WriteLog(DEBUG,"Try to create node, path %s",convertedPath);
-	returnStatus=mknod(convertedPath,mode,dev);
-    if (returnStatus != 0)
-    {
-		returnStatus=WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot create node, path %s",convertedPath);
-	}
-  
-    
-    return returnStatus;
-}*/
+
 
 int WORM_mkdir(const char *path, mode_t mode)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
+
     LogEnter("WORM_mkdir");
-	
+
     ConvertPath(convertedPath, path);
-    
+
 	WriteLog(DEBUG,"Try to create directory, path %s",convertedPath);
     returnStatus = mkdir(convertedPath, mode);
 	if (returnStatus != 0)
@@ -49,11 +31,13 @@ int WORM_mkdir(const char *path, mode_t mode)
 	{
 		AuditSuccess(CREATE,DIRECTORY,path,OK);
 		SetRealOwnerID(convertedPath);
-		SetRetentionAndExpiration(path,convertedPath);
+		SetRetention(path,convertedPath);
+		if (AutoLock!=0) SetExpirationDate(path,convertedPath);
+
 	}
 
 
-	    
+
     return returnStatus;
 }
 
@@ -61,11 +45,11 @@ int WORM_rmdir(const char *path)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
+
     LogEnter("WORM_rmdir");
 
     ConvertPath(convertedPath, path);
-    
+
     if (IsExpired(convertedPath)==false)
     {
 		returnStatus=WriteErrorNumber(WARN);
@@ -76,7 +60,7 @@ int WORM_rmdir(const char *path)
 
     WriteLog(DEBUG,"Try to remove directory, path %s",convertedPath);
     returnStatus = rmdir(convertedPath);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
 		returnStatus=WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot remove directory, path %s",convertedPath);
@@ -86,8 +70,8 @@ int WORM_rmdir(const char *path)
 	{
 		AuditSuccess(DELETE,DIRECTORY,path,OK);
 	}
-	
-	
+
+
     return returnStatus;
 }
 
@@ -99,7 +83,7 @@ int WORM_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offse
     struct dirent *directoryEntry;
     char convertedPath[PATH_MAX];
 
-    
+
     LogEnter("WORM_readdir");
     ConvertPath(convertedPath, path);
 
@@ -111,19 +95,19 @@ int WORM_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offse
 		WriteLog(ERROR,"Cannot read directory content, path %s",convertedPath);
 		return returnStatus;
 	}
-	
+
 	WriteLog(DEBUG,"Try to fill filler buffer",convertedPath);
- 	while ((directoryEntry = readdir(directory)) != NULL) 
+ 	while ((directoryEntry = readdir(directory)) != NULL)
     {
-		if (filler(buf, directoryEntry->d_name, NULL, 0) != 0) 
+		if (filler(buf, directoryEntry->d_name, NULL, 0) != 0)
 		{
 			errno= ENOMEM;
 			returnStatus=WriteErrorNumber(ERROR);
 			WriteLog(ERROR,"Filler buffer is full, path %s",convertedPath);
 			return returnStatus;
 		}
-    } 
-		
+    }
+
 	WriteLog(DEBUG,"Try to close directory content");
 	returnStatus=closedir(directory);
     if (returnStatus < 0)
@@ -131,7 +115,7 @@ int WORM_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offse
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot close directory from file_info");
 	}
-            
+
     return returnStatus;
 }
 
@@ -140,28 +124,28 @@ int WORM_opendir(const char *path, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
+
     LogEnter("WORM_opendir");
     ConvertPath(convertedPath, path);
-    
+
     WriteLog(DEBUG,"Try to open directory, path %s",convertedPath);
     fi->fh = (intptr_t)opendir(convertedPath);
-    if (fi->fh == 0) 
+    if (fi->fh == 0)
     {
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot open directory, path %s",convertedPath);
 	}
-	
-   
+
+
     return returnStatus;
 }
 
 int WORM_releasedir(const char *path, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
-    
+
     LogEnter("WORM_releasedir");
-    
+
     WriteLog(DEBUG,"Try to close directory from file_info");
     returnStatus=closedir((DIR *) (uintptr_t) fi->fh);
     if (returnStatus < 0)
@@ -169,18 +153,9 @@ int WORM_releasedir(const char *path, struct fuse_file_info *fi)
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot close directory from file_info");
 	}
-	
+
     return returnStatus;
 }
 
-/*int WORM_fsyncdir(const char *path, int datasync, struct fuse_file_info *fi)
-{
-    //int returnStatus = 0;
-    
-    WriteLog("fsyncdir path=%s, datasync=%d, fi=0x%08x", path, datasync, fi);
-    //log_fi(fi);
-    //to be checked
-    
-    return -1;//returnStatus;
-}*/
+
 

@@ -22,6 +22,7 @@ extern const char* UPDATE;
 extern const char* cFILE;
 extern const char* DIRECTORY;
 extern const char* EXPIRATION;
+extern const char* LOCK;
 extern const char* RETENTION;
 extern const char* OWNER;
 extern const char* MODE;
@@ -33,6 +34,8 @@ extern unsigned char ID;
 extern int MaxLogFileLines;
 extern int MaxAuditFileLines;
 extern int WriteAuditFiles;
+extern int LockDelay;
+extern int AutoLock;
 
 //void StartAuditTimer();
 //void StopAuditTimer();

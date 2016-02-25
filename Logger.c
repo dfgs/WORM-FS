@@ -34,6 +34,7 @@ const char* UPDATE="UPDATE";
 const char* cFILE="FILE";
 const char* DIRECTORY="DIRECTORY";
 const char* EXPIRATION="EXPIRATION";
+const char* LOCK="LOCK";
 const char* RETENTION="RETENTION";
 const char* OWNER="OWNER";
 const char* MODE="MODE";
@@ -47,6 +48,8 @@ int MaxAuditFileLines=100;
 int WriteAuditFiles=0;
 static int currentLogFileLines;
 static int currentAuditFileLines;
+int LockDelay=300;
+int AutoLock=300;
 
 FILE *logFile;
 FILE *auditFile;
