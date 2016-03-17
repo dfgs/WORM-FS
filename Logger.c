@@ -34,6 +34,7 @@ const char* UPDATE="UPDATE";
 const char* cFILE="FILE";
 const char* DIRECTORY="DIRECTORY";
 const char* EXPIRATION="EXPIRATION";
+const char* LOCK="LOCK";
 const char* RETENTION="RETENTION";
 const char* OWNER="OWNER";
 const char* MODE="MODE";
@@ -47,6 +48,8 @@ int MaxAuditFileLines=100;
 int WriteAuditFiles=0;
 static int currentLogFileLines;
 static int currentAuditFileLines;
+int LockDelay=300;
+int AutoLock=300;
 
 FILE *logFile;
 FILE *auditFile;
@@ -101,6 +104,8 @@ void DisposeLog()
 
 void OpenLog()
 {
+    int result;
+
     if (FileExists("/var/log/WORM.log")==1) RenameLog();
 
     currentLogFileLines=0;
@@ -110,9 +115,11 @@ void OpenLog()
 		perror("Failed to create log file");
 		exit(EXIT_FAILURE);
 	}
- 	setvbuf(logFile, NULL, _IOLBF, 0);//*/
- 	//WriteLog(DEBUG,"Default retention=%i",DefaultRetention);
-
+ 	result=setvbuf(logFile, NULL, _IOLBF, 0);//*/
+    if (result!=0)
+    {
+ 		perror("Failed to set log file buffer");
+   }
 }
 
 
@@ -165,7 +172,6 @@ void WriteLog(const char *ErrorLevel,const char *format, ...)
 	fprintf(logFile,"\n");
 	fflush(logFile);
 
-	pthread_mutex_unlock(&log_mutex);
 
     currentLogFileLines++;
     if (currentLogFileLines==MaxLogFileLines)
@@ -174,6 +180,7 @@ void WriteLog(const char *ErrorLevel,const char *format, ...)
         OpenLog();
     }
 
+	pthread_mutex_unlock(&log_mutex);
 
 }
 
@@ -189,6 +196,7 @@ int WriteErrorNumber(const char *LogLevel)
 
 void OpenAudit()
 {
+    int result;
 
     if (WriteAuditFiles==0) return;
 
@@ -201,8 +209,11 @@ void OpenAudit()
 		perror("Failed to create audit file");
 		exit(EXIT_FAILURE);
 	}
- 	setvbuf(auditFile, NULL, _IOLBF, 0);//*/
-
+ 	result=setvbuf(auditFile, NULL, _IOLBF, 0);//*/
+    if (result!=0)
+    {
+        perror("Failed to set audit file buffer");
+    }
 }
 
 void RenameAudit()
@@ -242,7 +253,6 @@ void WriteAudit(const char *Action,const char *Entity,const char* Result,const c
 	fflush(auditFile);
 
 
-	pthread_mutex_unlock(&audit_mutex);
 
     currentAuditFileLines++;
     if (currentAuditFileLines==MaxAuditFileLines)
@@ -250,6 +260,8 @@ void WriteAudit(const char *Action,const char *Entity,const char* Result,const c
         CloseAudit();
         OpenAudit();
     }
+
+	pthread_mutex_unlock(&audit_mutex);
 
 }
 void AuditSuccess(const char *Action,const char *Entity,const char* Path,const char *Format, ...)

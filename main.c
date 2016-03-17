@@ -51,6 +51,8 @@ static void read_Conf()
     mountPath=ini_getString(ini,"General","MountPath","/mnt/WORM");
     repositoryPath=ini_getString(ini,"General","RepositoryPath","/tmp");
     DefaultRetention = ini_getInt(ini, "General","DefaultRetention", 0);
+    LockDelay = ini_getInt(ini, "General","LockDelay", 300);
+    AutoLock = ini_getInt(ini, "General","AutoLock", 0);
     MaxLogFileLines = ini_getInt(ini, "Logs","MaxLogFileLines", 100);
     MaxAuditFileLines = ini_getInt(ini, "Logs","MaxAuditFileLines", 100);
     WriteAuditFiles=ini_getInt(ini,"Logs","WriteAuditFiles",0);
@@ -114,6 +116,8 @@ static void *WORM_init(struct fuse_conn_info *conn)
 	WriteLog(INFO,"MaxLogFileLines is %i",MaxLogFileLines);
 	WriteLog(INFO,"MaxAuditFileLines is %i",MaxAuditFileLines);
 	WriteLog(INFO,"WriteAuditFiles is %i",WriteAuditFiles);
+	WriteLog(INFO,"LockDelay is %i",LockDelay);
+	WriteLog(INFO,"AutoLock is %i",AutoLock);
     LoadFilters();
 
 
@@ -201,11 +205,7 @@ int main(int argc, char *argv[])
     memcpy(newArgs, argv, argc*sizeof(char*));
     newArgs[argc]=mountPath;
 
-    /*for(result=0;result<=argc;result++)
-    {
-        printf("%s\n",newArgs[result]);
-    }
-    return 0;*/
+
 
 	result = fuse_main(argc+1, newArgs, &WORM_oper, NULL);
 

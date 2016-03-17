@@ -25,12 +25,14 @@ int WORM_open(const char *path, struct fuse_file_info *fi)
 	int returnStatus = 0;
     char convertedPath[PATH_MAX];
 	int writeAccess;
+    int create;
 
     LogEnter("WORM_open");
     ConvertPath(convertedPath, path);
-    
+
     writeAccess=(fi->fh & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC));
-    
+    create=(fi->fh & O_CREAT );
+
     if ( (writeAccess!=0) && (IsExpired(convertedPath)==false))
     {
 		returnStatus=WriteErrorNumber(WARN);
@@ -38,11 +40,11 @@ int WORM_open(const char *path, struct fuse_file_info *fi)
 		AuditFailure(UPDATE,cFILE,path,NOTEXPIRED);
 		return returnStatus;
 	}
- 
-   
+
+
     WriteLog(DEBUG,"Try to open file, path %s, fh=%i",convertedPath,fi->fh);
     fi->fh  = open(convertedPath, fi->flags);
-    if (fi->fh  < 0) 
+    if (fi->fh  < 0)
     {
 		returnStatus=WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot open file, path %s",convertedPath);
@@ -50,15 +52,16 @@ int WORM_open(const char *path, struct fuse_file_info *fi)
 	}
 	else
 	{
-		if (writeAccess!=0)
+		if (create!=0)
 		{
+			SetRetention(path,convertedPath);
 			AuditSuccess(UPDATE,cFILE,path,OK);
 			//SetRetentionAndExpiration(path,convertedPath);
 		}
 	}
 
- 
-    
+
+
     return returnStatus;
 }
 
@@ -73,7 +76,7 @@ int WORM_release(const char *path, struct fuse_file_info *fi)
 
     WriteLog(DEBUG,"Try to close file_info");
     returnStatus = close(fi->fh);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot close file_info");
@@ -84,7 +87,7 @@ int WORM_release(const char *path, struct fuse_file_info *fi)
  		if (writeAccess!=0) SetRetentionAndExpiration(path,convertedPath);
 	}*/
 
-			    
+
     return returnStatus;
 }
 
@@ -92,17 +95,17 @@ int WORM_release(const char *path, struct fuse_file_info *fi)
 int WORM_read(const char *path, char *buf, size_t size, off_t offset,struct fuse_file_info *fi)
 {
     int returnStatus = 0;
-    
+
     LogEnter("WORM_read");
-    
+
     WriteLog(DEBUG,"Try to read file from file_info");
     returnStatus = pread(fi->fh, buf, size, offset);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot read from file_info");
 	}
-	
+
     return returnStatus;
 }
 
@@ -112,10 +115,10 @@ int WORM_truncate(const char *path, off_t newsize)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
+
     LogEnter("WORM_truncate");
     ConvertPath(convertedPath, path);
-    
+
     if (IsExpired(convertedPath)==false)
     {
 		returnStatus=WriteErrorNumber(WARN);
@@ -126,7 +129,7 @@ int WORM_truncate(const char *path, off_t newsize)
 
     WriteLog(DEBUG,"Try to truncate file, path %s",convertedPath);
     returnStatus = truncate(convertedPath, newsize);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
 		returnStatus=WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot truncate file, path %s",convertedPath);
@@ -136,17 +139,17 @@ int WORM_truncate(const char *path, off_t newsize)
 	{
 		AuditSuccess(UPDATE,cFILE,path,OK);
 	}
-		
+
     return returnStatus;
 }
 int WORM_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
+
     LogEnter("WORM_ftruncate");
     ConvertPath(convertedPath, path);
-    
+
     if (IsExpired(convertedPath)==false)
     {
 		returnStatus=WriteErrorNumber(WARN);
@@ -154,10 +157,10 @@ int WORM_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi)
 		AuditFailure(UPDATE,cFILE,path,NOTEXPIRED);
 		return returnStatus;
 	}
-    
+
     WriteLog(DEBUG,"Try to truncate file from file_info, path %s",convertedPath);
     returnStatus = ftruncate(fi->fh, offset);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
 		returnStatus=WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot truncate file from file_info, path %s",convertedPath);
@@ -168,24 +171,24 @@ int WORM_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi)
 		AuditSuccess(UPDATE,cFILE,path,OK);
 	}
 
-    
+
     return returnStatus;
 }
 
 int WORM_write(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info *fi)
 {
     int returnStatus = 0;
-    
+
     LogEnter("WORM_write");
-	
+
     WriteLog(DEBUG,"Try to write file with file_info");
     returnStatus = pwrite(fi->fh, buf, size, offset);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot write with file_info");
 	}
-    
+
     return returnStatus;
 }
 
@@ -193,14 +196,14 @@ int WORM_write(const char *path, const char *buf, size_t size, off_t offset,stru
 /*int WORM_flush(const char *path, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
-    
+
     WriteLog("flush path=%s, fi=0x%08x", path, fi);
 	returnStatus=fflush((FILE*)fi->fh);
     if (returnStatus < 0)
     {
 		returnStatus = WriteError("fflush");
 	}
-	
+
     return returnStatus;
 }*/
 
@@ -210,13 +213,13 @@ int WORM_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
+
     LogEnter("WORM_create");
     ConvertPath(convertedPath, path);
-    
+
     WriteLog(DEBUG,"Try to create file, path %s",convertedPath);
     fi->fh = creat(convertedPath, mode);
-    if (fi->fh < 0) 
+    if (fi->fh < 0)
     {
 		returnStatus = WriteErrorNumber(ERROR);
 		WriteLog(ERROR,"Cannot create file, path %s",convertedPath);
@@ -226,7 +229,8 @@ int WORM_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	{
 		AuditSuccess(CREATE,cFILE,path,OK);
 		SetRealOwnerID(convertedPath);
-		SetRetentionAndExpiration(path,convertedPath);
+		SetRetention(path,convertedPath);
+		if (AutoLock!=0) SetExpirationDate(path,convertedPath);
 	}
 
 	return returnStatus;
