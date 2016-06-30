@@ -4,35 +4,34 @@
 
 #include <regex.h>
 #include <time.h>
-#include "utils.h"
+#include "Utils.h"
 
 
 
 struct Filter
 {
-	regex_t regex;
-	unsigned short value;
+	regex_t Regex;
+	unsigned short Value;
 };
 
-extern unsigned short defaultRetention;
+extern unsigned short DefaultRetention;
 extern int filtersCount;
 extern struct Filter *filters;
 
 
-unsigned short getParentRetention(const char* funcName,const char *path);
-unsigned short getRetention(const char* funcName,const char *path);
+unsigned short GetParentRetention(const char *Path);
+unsigned short GetRetention(const char *Path);
 
-time_t calcExpirationDate(const char* funcName,unsigned short retention);
-time_t getExpirationDate(const char* funcName,const char* path);
-time_t getLockDate(const char* funcName,const char* path);
+time_t CalcExpirationDate(unsigned short Retention);
+time_t GetExpirationDate(const char* Path);
+time_t GetLockDate(const char* Path);
 
-void setRetention(const char* funcName,const char *path,const char *convertedPath);
-void setExpirationDate(const char* funcName,const char* path,const char *convertedPath);
-void setExpirationDateExplicit(const char* funcName,const char* path,const char *convertedPath,time_t expirationDate);
-void setLockDate(const char* funcName,const char* path,const char *convertedPath);
+void SetRetention(const char *path,const char *convertedPath);
+void SetExpirationDate(const char* path,const char *convertedPath);
+void SetLockDate(const char* path,const char *convertedPath);
 
-int isExpired(const char* funcName,const char *path);
-//void setRetentionAndExpiration(const char *path,const char *convertedPath);
+bool IsExpired(const char *Path);
+//void SetRetentionAndExpiration(const char *path,const char *convertedPath);
 
 
 

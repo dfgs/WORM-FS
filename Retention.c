@@ -1,6 +1,6 @@
-#include "retention.h"
-#include "logger.h"
-#include "utils.h"
+#include "Retention.h"
+#include "Logger.h"
+#include "Utils.h"
 #include <dirent.h>
 #include <fuse.h>
 #include <ctype.h>
@@ -20,245 +20,254 @@
 #include <regex.h>
 #include <inttypes.h>
 
-unsigned short defaultRetention=0;
+unsigned short DefaultRetention=0;
 
 int filtersCount=0;
 struct Filter *filters;
 
-unsigned short getRetentionApplied(const char* funcName,const char *path, int* filterIndex)
+unsigned short GetRetentionApplied(const char *Path, int* FilterIndex)
 {
 	int index;
 	int match;
+	//regmatch_t matches[100];
 
-    logEnter(__func__,path);
+	LogEnter("GetRetentionApplied");
 
-    writeLog(funcName, path,DEBUG, "Try to match rule patterns");
- 	for(index=0;index<filtersCount;index++)
+	for(index=0;index<filtersCount;index++)
 	{
-		match=regexec(&filters[index].regex, path, 0, NULL, 0);
+		WriteLog(DEBUG,"Try to match pattern %i",index);
+
+		match=regexec(&filters[index].Regex, Path, 0, NULL, 0);
 		if (match==0)
 		{
-			*filterIndex=index;
-			return filters[index].value;
+			*FilterIndex=index;
+			return filters[index].Value;
 		}
 	}
 
- 	return 65535;
+	// by default we apply retention
+	return 65535;
 }
 
 
-unsigned short getParentRetention(const char* funcName,const char *path)
+unsigned short GetParentRetention(const char *Path)
 {
 	char pathCopy[PATH_MAX];
 	char* parentPath;
 
-    logEnter(__func__,path);
-	strcpy(pathCopy,path);
+	LogEnter("GetParentRetention");
+	strcpy(pathCopy,Path);
 
-    writeLog(funcName, path,DEBUG,"Try to get parent directory");
+    WriteLog(DEBUG,"Try to get parent directory, path %s",pathCopy);
 	parentPath=dirname(pathCopy);
 	if (parentPath==NULL)
 	{
-		writeLog(funcName, path,ERROR,"Cannot find parent directory, will use default retention");
-		return defaultRetention;
+		WriteLog(ERROR,"Cannot find parent directory, will use default retention, path %s",Path);
+		return DefaultRetention;
 	}
 
-	return getRetention(funcName,parentPath);
+	return GetRetention(parentPath);
  }
 
-unsigned short getRetention(const char* funcName,const char *path)
+unsigned short GetRetention(const char *Path)
 {
 	unsigned short retention;
     int status;
 
-    logEnter(__func__,path);
+	LogEnter("GetRetention");
 
-    writeLog(funcName, path,DEBUG,"Try to get extended attribute user.Retention");
-	status = lgetxattr(path, "user.Retention", &retention, sizeof(retention));
+    WriteLog(DEBUG,"Try to get extended attribute user.Retention, path %s",Path);
+	status = lgetxattr(Path, "user.Retention", &retention, sizeof(retention));
 	if (status<0)
 	{
-        writeErrorNumber(funcName, path);
-		return defaultRetention;
+		WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot get extended attribute user.Retention, will use default retention, path %s",Path);
+		return DefaultRetention;
 	}
 
-	//writeLog(DEBUG,"Retention value is %i",retention);
+
+	//WriteLog(DEBUG,"Retention value is %i",retention);
 	return retention;
 }
 
-void setRetention(const char* funcName,const char *path,const char *convertedPath)
+void SetRetention(const char *path,const char *convertedPath)
 {
     int status;
 	unsigned short retention;
 	int filterIndex;
 
-    logEnter(__func__,path);
+	LogEnter("SetRetention");
 
-	retention = getRetentionApplied(funcName,convertedPath,&filterIndex);
+	retention = GetRetentionApplied(convertedPath,&filterIndex);
 	if (retention==65535)
 	{
-        writeLog(funcName, path,DEBUG,"Path doesn't match any retention filter, trying to apply parent folder's retention");
-        retention=getParentRetention(funcName,convertedPath);
+        WriteLog(DEBUG,"Path %s doesn't match any retention filter, trying to apply parent folder's retention",path);
+        retention=GetParentRetention(convertedPath);
 	}
 	else
 	{
-        writeLog(funcName, path,DEBUG,"Path matches retention filter %i, retention of %i day(s) will be applied",filterIndex,retention);
+		WriteLog(DEBUG,"Path %s matches retention filter %i, retention of %i day(s) will be applied",path,filterIndex,retention);
 	}
 
-    writeLog(funcName, path,DEBUG,"Try to set extended attribute user.Retention");
+    WriteLog(DEBUG,"Try to set extended attribute user.Retention, path %s",convertedPath);
 	status = lsetxattr(convertedPath, "user.Retention", &retention, sizeof(retention),0);
 	if (status<0)
 	{
-        writeErrorNumber(funcName, path);
-		auditFailure(UPDATE,RETENTION,path,"%i",retention);
+		WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot set extended attribute user.Retention, path %s",convertedPath);
+		AuditFailure(UPDATE,RETENTION,path,"%i",retention);
 	}
 	else
 	{
-		auditSuccess(UPDATE,RETENTION,path,"%i",retention);
+		AuditSuccess(UPDATE,RETENTION,path,"%i",retention);
 	}
 
 
 }
 
-time_t calcExpirationDate(const char* funcName,unsigned short retention)
+time_t CalcExpirationDate(unsigned short Retention)
 {
 	time_t now;
 	time_t expiration;
 
-    //logEnter(__func__,path);
+	LogEnter("CalcExpirationDate");
 
 	now=time(NULL);
+	//WriteLog("Current date/time is %s",ctime(&now));
 
-	expiration=now+24*3600*retention;
+	expiration=now+24*3600*Retention;
+	//WriteLog("Expiration date/time is %s",ctime(&expiration));
 
 	return expiration;
 
 }
 
-time_t getExpirationDate(const char* funcName,const char *path)
+time_t GetExpirationDate(const char *Path)
 {
 	time_t expiration;
     int status;
     int64_t value;
 	//long long tmp;
 
-    logEnter(__func__,path);
+	LogEnter("GetExpirationDate");
 
-    writeLog(funcName, path,DEBUG,"Try to get extended attribute user.ExpirationDate");
-	status = lgetxattr(path, "user.ExpirationDate", &value, sizeof(value));
-	if (status<0) return 0;
-	/*{
-        returnStatus = writeErrorNumber(funcName, path);
+    WriteLog(DEBUG,"Try to get extended attribute user.ExpirationDate, path %s",Path);
+	status = lgetxattr(Path, "user.ExpirationDate", &value, sizeof(value));
+	if (status<0)
+	{
+		WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot get extended attribute user.ExpirationDate, path %s",Path);
 		return 0;
-	}*/
+	}
 	expiration=value; //be sure to read 64 bits
 
-	//writeLog("Expiration date/time is %s",ctime(&expiration));
+	//WriteLog("Expiration date/time is %s",ctime(&expiration));
 	return expiration;
 }
-time_t getLockDate(const char* funcName,const char *path)
+time_t GetLockDate(const char *Path)
 {
 	time_t lock;
     int status;
     int64_t value;
 	//long long tmp;
 
-    logEnter(__func__,path);
+	LogEnter("GetLockDate");
 
-    writeLog(funcName, path,DEBUG,"Try to get extended attribute user.LockDate");
-	status = lgetxattr(path, "user.LockDate", &value, sizeof(value));
-	if (status<0) return 0;
-	/*{
-        returnStatus = writeErrorNumber(funcName, path);
+    WriteLog(DEBUG,"Try to get extended attribute user.LockDate, path %s",Path);
+	status = lgetxattr(Path, "user.LockDate", &value, sizeof(value));
+	if (status<0)
+	{
+		WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot get extended attribute user.LockDate, path %s",Path);
 		return 0;
-	}*/
+	}
 	lock=value; //be sure to read 64 bits
 
-	//writeLog("Expiration date/time is %s",ctime(&expiration));
+	//WriteLog("Expiration date/time is %s",ctime(&expiration));
 	return lock;
 }
 
-void setExpirationDate(const char* funcName,const char *path,const char *convertedPath)
+void SetExpirationDate(const char *path,const char *convertedPath)
 {
     int status;
 	//long long tmp;
     unsigned short retention;
+    int64_t value;
     time_t expirationDate;
 
-    //logEnter(__func__,path);
+	LogEnter("SetExpirationDate");
 
-    retention=getRetention(funcName,convertedPath);
-	expirationDate=calcExpirationDate(funcName,retention);
-
-    setExpirationDateExplicit(funcName,path,convertedPath,expirationDate);
-
-}
-void setExpirationDateExplicit(const char* funcName,const char *path,const char *convertedPath,time_t expirationDate)
-{
-    int status;
-	//long long tmp;
-    //unsigned short retention;
-    char buffer[20];
-    int64_t value;
-
-    logEnter(__func__,path);
+    retention=GetRetention(convertedPath);
+	expirationDate=CalcExpirationDate(retention);
 
 	value=expirationDate; // be sure to write 64 bits
 
-	setLockDate(funcName,path,convertedPath);
+	SetLockDate(path,convertedPath);
 
-    convertTime(expirationDate,buffer,20);
-    writeLog(funcName, path,DEBUG,"Try to set extended attribute user.ExpirationDate");
+    WriteLog(DEBUG,"Try to set extended attribute user.ExpirationDate, path %s",convertedPath);
 	status = lsetxattr(convertedPath, "user.ExpirationDate", &value,sizeof(value),0);
 	if (status<0)
 	{
-		writeErrorNumber(funcName, path);
-		auditFailure(UPDATE,EXPIRATION,path,"%" PRId64,value);
+		WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot set extended attribute user.ExpirationDate, path %s",convertedPath);
+		AuditFailure(UPDATE,EXPIRATION,path,"%" PRId64,value);
 	}
 	else
 	{
-		auditSuccess(UPDATE,EXPIRATION,path,"%" PRId64, value);
+		AuditSuccess(UPDATE,EXPIRATION,path,"%" PRId64, value);
 	}
 }
-
-void setLockDate(const char* funcName,const char *path,const char *convertedPath)
+void SetLockDate(const char *path,const char *convertedPath)
 {
     int status;
 	//long long tmp;
     int64_t value;
     time_t LockDate;
 
-    logEnter(__func__,path);
+	LogEnter("SetLockDate");
 
     LockDate=time(NULL);
 
 	value=LockDate; // be sure to write 64 bits
 
-    writeLog(funcName, path,DEBUG,"Try to set extended attribute user.LockDate");
+    WriteLog(DEBUG,"Try to set extended attribute user.LockDate, path %s",convertedPath);
 	status = lsetxattr(convertedPath, "user.LockDate", &value,sizeof(value),0);
 	if (status<0)
 	{
-        writeErrorNumber(funcName, path);
-        auditFailure(UPDATE,LOCK,path,"%" PRId64,value);
+		WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot set extended attribute user.LockDate, path %s",convertedPath);
+		AuditFailure(UPDATE,LOCK,path,"%" PRId64,value);
 	}
 	else
 	{
-		auditSuccess(UPDATE,LOCK,path,"%" PRId64, value);
+		AuditSuccess(UPDATE,LOCK,path,"%" PRId64, value);
 	}
 }
 
-int isExpired(const char* funcName,const char *path)
+bool IsExpired(const char *Path)
 {
 	time_t expiration;
 	time_t now;
 	time_t lock;
 
-    logEnter(__func__,path);
+	LogEnter("IsExpired");
 
 	now=time(NULL);
 
-    lock=getLockDate(funcName,path);
-    if ((autoLock!=0) && (now<lock+lockDelay)) return 1;
+    lock=GetLockDate(Path);
+    if (now<lock+LockDelay) return true;
 
-	expiration=getExpirationDate(funcName,path);
-	return (expiration<=now);
+
+	expiration=GetExpirationDate(Path);
+	if (expiration>now)
+	{
+		errno=EROFS;
+		//WriteLog(DEBUG,"Media is not expired, path %s",Path);
+		return false;
+	}
+	else
+	{
+		//WriteLog(DEBUG,"Media is expired, path %s",Path);
+		return true;
+	}
 }

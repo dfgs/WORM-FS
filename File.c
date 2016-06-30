@@ -1,7 +1,7 @@
-#include "file.h"
-#include "logger.h"
-#include "utils.h"
-#include "retention.h"
+#include "File.h"
+#include "Logger.h"
+#include "Utils.h"
+#include "Retention.h"
 #include <dirent.h>
 #include <fuse.h>
 #include <ctype.h>
@@ -27,39 +27,40 @@ int WORM_open(const char *path, struct fuse_file_info *fi)
 	int writeAccess;
     int create;
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_open");
+    ConvertPath(convertedPath, path);
 
-    writeAccess=(fi->flags & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC));
-    //writeLog(__func__,path,DEBUG,"Open flags are %i",fi->flags);
+    writeAccess=(fi->fh & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC));
+    create=(fi->fh & O_CREAT );
 
-    create=(fi->flags & O_CREAT );
-
-    writeLog(__func__,path,INFO,"Checking expiration");
-    if ( (writeAccess!=0) && (isExpired(__func__,convertedPath)==0))
+    if ( (writeAccess!=0) && (IsExpired(convertedPath)==false))
     {
-		writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(UPDATE,cFILE,path,NOTEXPIRED);
-		return -EACCES;
+		returnStatus=WriteErrorNumber(WARN);
+		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
+		AuditFailure(UPDATE,cFILE,path,NOTEXPIRED);
+		return returnStatus;
 	}
 
 
-    writeLog(__func__, path,INFO, "Try to open file");
+    WriteLog(DEBUG,"Try to open file, path %s, fh=%i",convertedPath,fi->fh);
     fi->fh  = open(convertedPath, fi->flags);
-    if (fi->fh  == 0)
+    if (fi->fh  < 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(UPDATE,cFILE,path,NOK);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot open file, path %s",convertedPath);
+		AuditFailure(UPDATE,cFILE,path,NOK);
 	}
 	else
 	{
 		if (create!=0)
 		{
-            writeLog(__func__, path,INFO, "Settng retention");
-			setRetention(__func__,path,convertedPath);
-			auditSuccess(UPDATE,cFILE,path,OK);
+			SetRetention(path,convertedPath);
+			AuditSuccess(UPDATE,cFILE,path,OK);
+			//SetRetentionAndExpiration(path,convertedPath);
 		}
 	}
+
+
 
     return returnStatus;
 }
@@ -68,13 +69,23 @@ int WORM_release(const char *path, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
+   	//int writeAccess;
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+	LogEnter("WORM_release");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to close file");
+    WriteLog(DEBUG,"Try to close file_info");
     returnStatus = close(fi->fh);
-    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
+    if (returnStatus < 0)
+    {
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot close file_info");
+	}
+	/*else
+	{
+		writeAccess=(fi->fh & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC));
+ 		if (writeAccess!=0) SetRetentionAndExpiration(path,convertedPath);
+	}*/
 
 
     return returnStatus;
@@ -85,11 +96,15 @@ int WORM_read(const char *path, char *buf, size_t size, off_t offset,struct fuse
 {
     int returnStatus = 0;
 
-    logEnter(__func__,path);
+    LogEnter("WORM_read");
 
-    writeLog(__func__, path,INFO, "Try to read file from file_info");
+    WriteLog(DEBUG,"Try to read file from file_info");
     returnStatus = pread(fi->fh, buf, size, offset);
-    if (returnStatus < 0) returnStatus = writeErrorNumber(__func__, path);
+    if (returnStatus < 0)
+    {
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot read from file_info");
+	}
 
     return returnStatus;
 }
@@ -101,58 +116,59 @@ int WORM_truncate(const char *path, off_t newsize)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_truncate");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__,path,INFO,"Checking expiration");
-    if (isExpired(__func__,convertedPath)==0)
+    if (IsExpired(convertedPath)==false)
     {
-        writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(UPDATE,cFILE,path,NOTEXPIRED);
-		return -EACCES;
+		returnStatus=WriteErrorNumber(WARN);
+		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
+		AuditFailure(UPDATE,cFILE,path,NOTEXPIRED);
+		return returnStatus;
 	}
 
-    writeLog(__func__, path,INFO, "Try to truncate file");
+    WriteLog(DEBUG,"Try to truncate file, path %s",convertedPath);
     returnStatus = truncate(convertedPath, newsize);
-    if (returnStatus != 0)
+    if (returnStatus < 0)
     {
-		returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(UPDATE,cFILE,path,NOK);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot truncate file, path %s",convertedPath);
+		AuditFailure(UPDATE,cFILE,path,NOK);
 	}
 	else
 	{
-		auditSuccess(UPDATE,cFILE,path,OK);
+		AuditSuccess(UPDATE,cFILE,path,OK);
 	}
 
     return returnStatus;
 }
-
 int WORM_ftruncate(const char *path, off_t offset, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_ftruncate");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__,path,INFO,"Checking expiration");
-    if (isExpired(__func__,convertedPath)==0)
+    if (IsExpired(convertedPath)==false)
     {
-        writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(UPDATE,cFILE,path,NOTEXPIRED);
-		return -EACCES;
+		returnStatus=WriteErrorNumber(WARN);
+		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
+		AuditFailure(UPDATE,cFILE,path,NOTEXPIRED);
+		return returnStatus;
 	}
 
-    writeLog(__func__, path,INFO, "Try to truncate file from file_info");
+    WriteLog(DEBUG,"Try to truncate file from file_info, path %s",convertedPath);
     returnStatus = ftruncate(fi->fh, offset);
-    if (returnStatus != 0)
+    if (returnStatus < 0)
     {
-		returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(UPDATE,cFILE,path,NOK);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot truncate file from file_info, path %s",convertedPath);
+		AuditFailure(UPDATE,cFILE,path,NOK);
 	}
 	else
 	{
-		auditSuccess(UPDATE,cFILE,path,OK);
+		AuditSuccess(UPDATE,cFILE,path,OK);
 	}
 
 
@@ -163,15 +179,15 @@ int WORM_write(const char *path, const char *buf, size_t size, off_t offset,stru
 {
     int returnStatus = 0;
 
-    logEnter(__func__,path);
+    LogEnter("WORM_write");
 
-    writeLog(__func__, path,INFO, "Try to write file from file_info");
+    WriteLog(DEBUG,"Try to write file with file_info");
     returnStatus = pwrite(fi->fh, buf, size, offset);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
-        auditFailure(UPDATE,cFILE,path,NOK);
-    }
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot write with file_info");
+	}
 
     return returnStatus;
 }
@@ -181,7 +197,7 @@ int WORM_write(const char *path, const char *buf, size_t size, off_t offset,stru
 {
     int returnStatus = 0;
 
-    writeLog("flush path=%s, fi=0x%08x", path, fi);
+    WriteLog("flush path=%s, fi=0x%08x", path, fi);
 	returnStatus=fflush((FILE*)fi->fh);
     if (returnStatus < 0)
     {
@@ -198,28 +214,24 @@ int WORM_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_create");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to create file");
+    WriteLog(DEBUG,"Try to create file, path %s",convertedPath);
     fi->fh = creat(convertedPath, mode);
-    if (fi->fh == 0)
+    if (fi->fh < 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(CREATE,cFILE,path,NOK);
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot create file, path %s",convertedPath);
+		AuditFailure(CREATE,cFILE,path,NOK);
 	}
 	else
 	{
-		auditSuccess(CREATE,cFILE,path,OK);
-        writeLog(__func__, path,INFO, "Settng retention and owner");
-		setRealOwnerID(__func__, convertedPath);
-		setRetention(__func__,path,convertedPath);
-		if (autoLock!=0)
-		{
-            writeLog(__func__, path,INFO, "Auto lock is on, setting expiration date");
-            setExpirationDate(__func__,path,convertedPath);
-        }
-    }
+		AuditSuccess(CREATE,cFILE,path,OK);
+		SetRealOwnerID(convertedPath);
+		SetRetention(path,convertedPath);
+		if (AutoLock!=0) SetExpirationDate(path,convertedPath);
+	}
 
 	return returnStatus;
 }

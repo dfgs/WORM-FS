@@ -21,17 +21,17 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <sys/mount.h>
-#include "logger.h"
-#include "retention.h"
-#include "directory.h"
-#include "utils.h"
-#include "attribute.h"
-#include "link.h"
-#include "shared.h"
-#include "file.h"
+#include "Logger.h"
+#include "Retention.h"
+#include "Directory.h"
+#include "Utils.h"
+#include "Attribute.h"
+#include "Link.h"
+#include "Shared.h"
+#include "File.h"
 #include "inifile.h"
 
-static const char* _VERSION="0001";
+static const char* Version="0001";
 static SectionDictionary *ini;
 
 char **newArgs;
@@ -50,12 +50,12 @@ static void read_Conf()
     ID = ini_getInt(ini, "General","ID", 1);
     mountPath=ini_getString(ini,"General","MountPath","/mnt/WORM");
     repositoryPath=ini_getString(ini,"General","RepositoryPath","/tmp");
-    defaultRetention = ini_getInt(ini, "General","DefaultRetention", 0);
-    lockDelay = ini_getInt(ini, "General","LockDelay", 300);
-    autoLock = ini_getInt(ini, "General","AutoLock", 0);
-    maxLogFileLines = ini_getInt(ini, "Logs","MaxLogFileLines", 100);
-    maxAuditFileLines = ini_getInt(ini, "Logs","MaxAuditFileLines", 100);
-    writeAuditFiles=ini_getInt(ini,"Logs","WriteAuditFiles",0);
+    DefaultRetention = ini_getInt(ini, "General","DefaultRetention", 0);
+    LockDelay = ini_getInt(ini, "General","LockDelay", 300);
+    AutoLock = ini_getInt(ini, "General","AutoLock", 0);
+    MaxLogFileLines = ini_getInt(ini, "Logs","MaxLogFileLines", 100);
+    MaxAuditFileLines = ini_getInt(ini, "Logs","MaxAuditFileLines", 100);
+    WriteAuditFiles=ini_getInt(ini,"Logs","WriteAuditFiles",0);
 
 }
 static void free_Conf()
@@ -63,7 +63,7 @@ static void free_Conf()
     free_ini(ini);
 }
 
-static void loadFilters()
+static void LoadFilters()
 {
 	char* pattern;
 	int value;
@@ -72,53 +72,53 @@ static void loadFilters()
     int index;
     KeyValuePair keyValuePair;
 
-	logEnter(__func__,"ini file");
-
     section=ini_getSection(ini,"Retention");
-    filters=malloc(sizeof(struct Filter)*section->count);
+    filters=malloc(sizeof(struct Filter)*section->Count);
 
 
     filtersCount=0;
-	writeLog(__func__, "ini file",INFO,"Parsing WORM filter rules");
-    for(index=0;index<section->count;index++)
+	WriteLog(INFO,"Parsing WORM filter rules");
+    for(index=0;index<section->Count;index++)
     {
-        keyValuePair=section->items[index];
-        pattern=keyValuePair.key;
+        keyValuePair=section->Items[index];
+        pattern=keyValuePair.Key;
         value=ini_getUnsignedShort(ini,"Retention", pattern, 0);
 
         // need to extract rule freom key
 
-		writeLog(__func__, "ini file",INFO,"Compiling filter rule: %s %i",pattern,value);
-		filters[filtersCount].value=value;
-		result=regcomp(&filters[filtersCount].regex,pattern,REG_ICASE|REG_NOSUB|REG_NEWLINE|REG_EXTENDED);
+		WriteLog(DEBUG,"Compiling filter rule: %s %i",pattern,value);
+		filters[filtersCount].Value=value;
+		result=regcomp(&filters[filtersCount].Regex,pattern,REG_ICASE|REG_NOSUB|REG_NEWLINE|REG_EXTENDED);
 		if (result!=0)
 		{
-			writeLog(__func__, "ini file",ERROR,"Invalid filter regex pattern %s",pattern);
+			WriteLog(ERROR,"Invalid filter regex pattern %s",pattern);
 		} else filtersCount++;
     }
- 	writeLog(__func__, "ini file",INFO,"Filters count=%i",filtersCount);
+ 	WriteLog(INFO,"Filters count=%i",filtersCount);
 
 
 }
 
 static void *WORM_init(struct fuse_conn_info *conn)
 {
-	initLog();
-	openLog();
-	openAudit();
 
-	logEnter(__func__,"ini file");
 
-	writeLog(__func__,"ini file",INFO,"ID is %i",ID);
-	writeLog(__func__,"ini file",INFO,"Mount path is %s",mountPath);
-	writeLog(__func__,"ini file",INFO,"Repository path is %s",repositoryPath);
-	writeLog(__func__,"ini file",INFO,"DefaultRetention is %i",defaultRetention);
-	writeLog(__func__,"ini file",INFO,"MaxLogFileLines is %i",maxLogFileLines);
-	writeLog(__func__,"ini file",INFO,"MaxAuditFileLines is %i",maxAuditFileLines);
-	writeLog(__func__,"ini file",INFO,"WriteAuditFiles is %i",writeAuditFiles);
-	writeLog(__func__,"ini file",INFO,"LockDelay is %i",lockDelay);
-	writeLog(__func__,"ini file",INFO,"AutoLock is %i",autoLock);
-    loadFilters();
+	InitLog();
+	OpenLog();
+	OpenAudit();
+
+	LogEnter("WORM_init");
+
+	WriteLog(INFO,"ID is %i",ID);
+	WriteLog(INFO,"Mount path is %s",mountPath);
+	WriteLog(INFO,"Repository path is %s",repositoryPath);
+	WriteLog(INFO,"DefaultRetention is %i",DefaultRetention);
+	WriteLog(INFO,"MaxLogFileLines is %i",MaxLogFileLines);
+	WriteLog(INFO,"MaxAuditFileLines is %i",MaxAuditFileLines);
+	WriteLog(INFO,"WriteAuditFiles is %i",WriteAuditFiles);
+	WriteLog(INFO,"LockDelay is %i",LockDelay);
+	WriteLog(INFO,"AutoLock is %i",AutoLock);
+    LoadFilters();
 
 
     return NULL;
@@ -128,18 +128,16 @@ static void WORM_destroy(void *userdata)
 {
 	int index=0;
 
-    logEnter(__func__,"ini file");
-
-	writeLog(__func__, "ini file",INFO,"Releasing WORM filters");
+	WriteLog(INFO,"Releasing WORM filters");
 	for(index=0;index<filtersCount;index++)
 	{
-		regfree(&filters[index].regex);
+		regfree(&filters[index].Regex);
 	}//*/
 	free(filters);
 
-	closeAudit();
-	closeLog();
-	disposeLog();
+	CloseAudit();
+	CloseLog();
+	DisposeLog();
 
     free(newArgs);
     free_Conf();
@@ -148,6 +146,7 @@ static void WORM_destroy(void *userdata)
 
 static struct fuse_operations WORM_oper =
 {
+	.getattr = WORM_getattr,
 	.readlink = WORM_readlink,
 	.getdir = NULL,// no .getdir -- that's deprecated
 	//.mknod =  WORM_mknod,
@@ -168,7 +167,6 @@ static struct fuse_operations WORM_oper =
 	//.flush = WORM_flush,
 	.release = WORM_release,
 	.fsync = WORM_fsync,
-	.getattr = WORM_getattr,
 	.getxattr = WORM_getxattr,
 	.listxattr = WORM_listxattr,
 
@@ -196,7 +194,7 @@ int main(int argc, char *argv[])
 
  	if ((argc ==2) && (strcmp(argv[1],"-h")==0))
 	{
-		printf("Current VERSION: %s\n",_VERSION);
+		printf("Current version: %s\n",Version);
 		printf("Usage: WORM options\n");
 		return 0;
 	}
@@ -207,7 +205,15 @@ int main(int argc, char *argv[])
     memcpy(newArgs, argv, argc*sizeof(char*));
     newArgs[argc]=mountPath;
 
+    /*for(result=0;result<=argc;result++)
+    {
+        printf("%s\n",newArgs[result]);
+    }
+    return 0;*/
+
 	result = fuse_main(argc+1, newArgs, &WORM_oper, NULL);
 
+
 	return result;
+
 }

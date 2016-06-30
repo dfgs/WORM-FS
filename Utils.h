@@ -6,15 +6,15 @@
 char *repositoryPath;
 char *mountPath;
 
-//typedef enum { false, true } bool;
+typedef enum { false, true } bool;
 
 
-void convertPath(char *DestPath, const char *originalPath);
-void setRealOwnerID(const char* funcName,const char *path);
-int getReadOnlyMode(const char* funcName,const char *path,int mode);
-int fileExists(const char *path);
-int directoryExists(const char *path);
-int createDirectory(const char* funcName,const char *path);
-void convertTime(time_t Time,char *Buffer,int bufferSize);
-int isReadOnly(const char *path);
+void ConvertPath(char *DestPath, const char *OriginalPath);
+void SetRealOwnerID(const char *Path);
+int GetReadOnlyMode(const char *Path,int Mode);
+int FileExists(const char *Path);
+int DirectoryExists(const char *Path);
+int CreateDirectory(const char *Path);
+
+
 #endif

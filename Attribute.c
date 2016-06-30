@@ -1,27 +1,30 @@
-#include "attribute.h"
-#include "logger.h"
-#include "utils.h"
-#include "retention.h"
+#include "Attribute.h"
+#include "Logger.h"
+#include "Utils.h"
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
-#include <errno.h>
 
 int WORM_getattr(const char *path, struct stat *statbuf)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    LogEnter("WORM_getattr");
 
-    convertPath(convertedPath, path);
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to get attributes");
+    WriteLog(DEBUG,"Try to get attributes, path %s",convertedPath);
     returnStatus = lstat(convertedPath, statbuf);
-    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
-	else statbuf->st_mode=getReadOnlyMode(__func__, convertedPath,statbuf->st_mode);
- 
+    if (returnStatus != 0)
+    {
+		 returnStatus=WriteErrorNumber(ERROR);
+		 //WriteLog(ERROR,"Cannot get attributes, path %s",convertedPath);
+	}
+
+	statbuf->st_mode=GetReadOnlyMode(convertedPath,statbuf->st_mode);
+
     return returnStatus;
 }
 int WORM_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi)
@@ -29,34 +32,36 @@ int WORM_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info 
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    //LogEnter("WORM_fgetattr");
+    ConvertPath(convertedPath, path);
 
-    convertPath(convertedPath, path);
-
-    writeLog(__func__, path,INFO, "Try to get file attributes");
+    //WriteLog(DEBUG,"Try to get attributes from file_info, path %s",convertedPath);
     returnStatus = fstat(fi->fh, statbuf);
-    
-    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
-    else statbuf->st_mode=getReadOnlyMode(__func__, convertedPath,statbuf->st_mode);
+	if (returnStatus != 0)
+    {
+		returnStatus=WriteErrorNumber(ERROR);
+		//WriteLog(ERROR,"Cannot get attributes from file_info, path %s",convertedPath);
+	}
+
+	statbuf->st_mode=GetReadOnlyMode(convertedPath,statbuf->st_mode);
 
     return returnStatus;
 }
-
-
-
 int WORM_getxattr(const char *path, const char *name, char *value, size_t size)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_getxattr");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to get extended attribute %s",name);
+    WriteLog(DEBUG,"Try to get extended attribute %s from file, path %s",name,convertedPath);
     returnStatus = lgetxattr(convertedPath, name, value, size);
-    
-    if (returnStatus < 0) returnStatus = writeErrorNumber(__func__, path);
-
+    if (returnStatus < 0)
+    {
+		returnStatus=WriteErrorNumber(ERROR);
+		//WriteLog(ERROR,"Cannot get extended attribute %s from file, path %s",name,convertedPath);
+	}
     return returnStatus;
 }
 
@@ -66,14 +71,27 @@ int WORM_listxattr(const char *path, char *list, size_t size)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_listxattr");
 
-    writeLog(__func__, path,INFO, "Try to get extended attributes list");
-	returnStatus = llistxattr(convertedPath, list, size);
+    ConvertPath(convertedPath, path);
+	WriteLog(DEBUG,"Try to get list extended attributes from file, path %s",convertedPath);
 
-    if (returnStatus < 0) returnStatus = writeErrorNumber(__func__, path);
-	
+    if (size>0)
+    {
+		returnStatus = llistxattr(convertedPath, list, size);
+		if (returnStatus < 0)
+		{
+			returnStatus=WriteErrorNumber(ERROR);
+			//WriteLog(ERROR,"Cannot list extended attributes from file, path %s",convertedPath);
+		}
+	}
+	else
+	{
+		WriteLog(WARN,"Extended list size is 0");
+		returnStatus=0;
+	}
+
+
     return returnStatus;
 }
 int WORM_setxattr(const char *path, const char *name, const char *value, size_t size, int flags)
@@ -81,57 +99,57 @@ int WORM_setxattr(const char *path, const char *name, const char *value, size_t 
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
-
-    writeLog(__func__,path,INFO,"Checking expiration");
-    if (isExpired(__func__,convertedPath)==0)
+    LogEnter("WORM_setxattr");
+    ConvertPath(convertedPath, path);
+    if (IsExpired(convertedPath)==false)
     {
-		writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(UPDATE,ATTRIBUTE,path,NOTEXPIRED,"%s",name);
-		return -EACCES;
+		returnStatus=WriteErrorNumber(WARN);
+		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
+		AuditFailure(UPDATE,ATTRIBUTE,path,NOTEXPIRED,"%s",name);
+		return returnStatus;
 	}
 
-	writeLog(__func__,path,INFO,"Try to set extended attribute %s",name);
+	WriteLog(DEBUG,"Try to set extended attributes %s to file, path %s",name,convertedPath);
     returnStatus = lsetxattr(convertedPath, name, value, size, flags);
 	if (returnStatus < 0)
 	{
-		returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(UPDATE,ATTRIBUTE,path,NOK,"%s",name);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot set extended attribute %s to file, path %s",name,convertedPath);
+		AuditFailure(UPDATE,ATTRIBUTE,path,NOK,"%s",name);
 	}
 	else
 	{
-		auditSuccess(UPDATE,ATTRIBUTE,path,OK,"%s",name);
+		AuditSuccess(UPDATE,ATTRIBUTE,path,OK,"%s",name);
 	}
     return returnStatus;
 }
-
 int WORM_removexattr(const char *path, const char *name)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_removexattr");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__,path,INFO,"Checking expiration");
-    if (isExpired(__func__,convertedPath)==0)
+    if (IsExpired(convertedPath)==false)
     {
-		writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(DELETE,ATTRIBUTE,path,NOTEXPIRED,"%s",name);
-		return -EACCES;
+		returnStatus=WriteErrorNumber(WARN);
+		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
+		AuditFailure(DELETE,ATTRIBUTE,path,NOTEXPIRED,"%s",name);
+		return returnStatus;
 	}
 
-	writeLog(__func__,path,INFO, "Try to remove extended attribute %s",name);
+	WriteLog(DEBUG,"Try to remove extended attribute %s from file, path %s",name,convertedPath);
     returnStatus = lremovexattr(convertedPath, name);
     if (returnStatus < 0)
     {
-		returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(DELETE,ATTRIBUTE,path,NOK,"%s",name);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot remove extended attribute %s from file, path %s",name,convertedPath);
+		AuditFailure(DELETE,ATTRIBUTE,path,NOK,"%s",name);
 	}
 	else
 	{
-		auditSuccess(DELETE,ATTRIBUTE,path,OK,"%s",name);
+		AuditSuccess(DELETE,ATTRIBUTE,path,OK,"%s",name);
 	}
     return returnStatus;
 }

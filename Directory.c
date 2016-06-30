@@ -1,7 +1,7 @@
-#include "directory.h"
-#include "logger.h"
-#include "retention.h"
-#include "utils.h"
+#include "Directory.h"
+#include "Logger.h"
+#include "Retention.h"
+#include "Utils.h"
 #include <fuse.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -15,30 +15,28 @@ int WORM_mkdir(const char *path, mode_t mode)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    LogEnter("WORM_mkdir");
 
-    convertPath(convertedPath, path);
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to create directory");
+	WriteLog(DEBUG,"Try to create directory, path %s",convertedPath);
     returnStatus = mkdir(convertedPath, mode);
-
 	if (returnStatus != 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(CREATE,DIRECTORY,path,NOK);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot create directory, path %s",convertedPath);
+		AuditFailure(CREATE,DIRECTORY,path,NOK);
 	}
 	else
 	{
-		auditSuccess(CREATE,DIRECTORY,path,OK);
-        writeLog(__func__, path,INFO, "Setting retention and owner");
-		setRealOwnerID(__func__, convertedPath);
-		setRetention(__func__,path,convertedPath);
-		if (autoLock!=0)
-		{
-            writeLog(__func__, path,INFO, "Auto lock is on, setting expiration date");
-            setExpirationDate(__func__,path,convertedPath);
-        }
+		AuditSuccess(CREATE,DIRECTORY,path,OK);
+		SetRealOwnerID(convertedPath);
+		SetRetention(path,convertedPath);
+		if (AutoLock!=0) SetExpirationDate(path,convertedPath);
+
 	}
+
+
 
     return returnStatus;
 }
@@ -48,29 +46,31 @@ int WORM_rmdir(const char *path)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    LogEnter("WORM_rmdir");
 
-    convertPath(convertedPath, path);
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__,path,INFO,"Checking expiration");
-    if (isExpired(__func__,convertedPath)==0)
+    if (IsExpired(convertedPath)==false)
     {
-		writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(DELETE,DIRECTORY,path,NOTEXPIRED);
-		return -EACCES;
+		returnStatus=WriteErrorNumber(WARN);
+		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
+		AuditFailure(DELETE,DIRECTORY,path,NOTEXPIRED);
+		return returnStatus;
 	}
 
-    writeLog(__func__, path,INFO, "Try to remove directory");
+    WriteLog(DEBUG,"Try to remove directory, path %s",convertedPath);
     returnStatus = rmdir(convertedPath);
     if (returnStatus < 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(DELETE,DIRECTORY,path,NOK);
+		returnStatus=WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot remove directory, path %s",convertedPath);
+		AuditFailure(DELETE,DIRECTORY,path,NOK);
 	}
 	else
 	{
-		auditSuccess(DELETE,DIRECTORY,path,OK);
+		AuditSuccess(DELETE,DIRECTORY,path,OK);
 	}
+
 
     return returnStatus;
 }
@@ -84,32 +84,37 @@ int WORM_readdir(const char *path, void *buf, fuse_fill_dir_t filler,off_t offse
     char convertedPath[PATH_MAX];
 
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_readdir");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to read directory content");
+    WriteLog(DEBUG,"Try to read directory content, path %s",convertedPath);
     directory = opendir(convertedPath);
 	if (directory==NULL)
 	{
-        returnStatus = writeErrorNumber(__func__, path);
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot read directory content, path %s",convertedPath);
 		return returnStatus;
 	}
 
-    writeLog(__func__, path,INFO, "Try to fill filler buffer");
+	WriteLog(DEBUG,"Try to fill filler buffer",convertedPath);
  	while ((directoryEntry = readdir(directory)) != NULL)
     {
 		if (filler(buf, directoryEntry->d_name, NULL, 0) != 0)
 		{
-            writeLog(__func__, path,ERROR, "Failed to fill filler buffer");
-            returnStatus = writeErrorNumber(__func__, path);
-			closedir(directory);
-            return -ENOMEM;
+			errno= ENOMEM;
+			returnStatus=WriteErrorNumber(ERROR);
+			WriteLog(ERROR,"Filler buffer is full, path %s",convertedPath);
+			return returnStatus;
 		}
     }
 
-    writeLog(__func__, path,INFO, "Try to close directory content");
- 	returnStatus=closedir(directory);
-    if (returnStatus != 0 ) returnStatus = writeErrorNumber(__func__, path);
+	WriteLog(DEBUG,"Try to close directory content");
+	returnStatus=closedir(directory);
+    if (returnStatus < 0)
+    {
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot close directory from file_info");
+	}
 
     return returnStatus;
 }
@@ -120,13 +125,18 @@ int WORM_opendir(const char *path, struct fuse_file_info *fi)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
-    convertPath(convertedPath, path);
+    LogEnter("WORM_opendir");
+    ConvertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to open directory");
+    WriteLog(DEBUG,"Try to open directory, path %s",convertedPath);
     fi->fh = (intptr_t)opendir(convertedPath);
-    if (fi->fh == 0) returnStatus = writeErrorNumber(__func__, path);
-	
+    if (fi->fh == 0)
+    {
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot open directory, path %s",convertedPath);
+	}
+
+
     return returnStatus;
 }
 
@@ -134,11 +144,15 @@ int WORM_releasedir(const char *path, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
 
-    logEnter(__func__,path);
+    LogEnter("WORM_releasedir");
 
-    writeLog(__func__, path,INFO, "Try to close directory from file_info");
+    WriteLog(DEBUG,"Try to close directory from file_info");
     returnStatus=closedir((DIR *) (uintptr_t) fi->fh);
-    if (returnStatus < 0) returnStatus = writeErrorNumber(__func__, path);
+    if (returnStatus < 0)
+    {
+		returnStatus = WriteErrorNumber(ERROR);
+		WriteLog(ERROR,"Cannot close directory from file_info");
+	}
 
     return returnStatus;
 }
