@@ -31,29 +31,31 @@ extern const char* LOCATION;
 extern const char* ATTRIBUTE;
 
 extern unsigned char ID;
-extern int MaxLogFileLines;
-extern int MaxAuditFileLines;
-extern int WriteAuditFiles;
-extern int LockDelay;
-extern int AutoLock;
+extern int maxLogFileLines;
+extern int maxAuditFileLines;
+extern int writeAuditFiles;
+extern int lockDelay;
+extern int autoLock;
 
 //void StartAuditTimer();
 //void StopAuditTimer();
-void InitLog(void);
-void DisposeLog(void);
-void RenameLog(void);
-void OpenLog(void);
-void CloseLog(void);
-void LogEnter(const char *Function);
-void WriteLog(const char *LogLevel,const char *format, ...);
-int WriteErrorNumber(const char *LogLevel);
-//void WriteLogHeader();
+void initLog(void);
+void disposeLog(void);
+void renameLog(void);
+void openLog(void);
+void closeLog(void);
 
-void OpenAudit(void);
-void CloseAudit(void);
-void RenameAudit(void);
-void WriteAudit(const char *Action,const char *Entity,const char* Result,const char* Path,const char *Value);
-void AuditSuccess(const char *Action,const char *Entity,const char* Path,const char *Format, ...);
-void AuditFailure(const char *Action,const char *Entity,const char* Path,const char *Format, ...);
+void logEnter(const char *funcName,const char* path);
+void writeLog(const char* funcName,const char* path,const char *errorLevel,const char *format, ...);
+int writeErrorNumber(const char* funcName,const char* path);
+
+//void writeLogHeader();
+
+void openAudit(void);
+void closeAudit(void);
+void renameAudit(void);
+void writeAudit(const char *action,const char *entity,const char* result,const char* path,const char *value);
+void auditSuccess(const char *action,const char *entity,const char* path,const char *format, ...);
+void auditFailure(const char *action,const char *entity,const char* path,const char *format, ...);
 
 #endif

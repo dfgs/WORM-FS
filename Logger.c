@@ -8,9 +8,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include "Logger.h"
+#include "logger.h"
 #include <limits.h>
-#include "Retention.h"
+#include "retention.h"
 #include <unistd.h>
 #include <sys/time.h>
 #include <signal.h>
@@ -43,13 +43,13 @@ const char* LOCATION="LOCATION";
 const char* ATTRIBUTE="ATTRIBUTE";
 
 unsigned char ID=1;
-int MaxLogFileLines=100;
-int MaxAuditFileLines=100;
-int WriteAuditFiles=0;
+int maxLogFileLines=100;
+int maxAuditFileLines=100;
+int writeAuditFiles=0;
 static int currentLogFileLines;
 static int currentAuditFileLines;
-int LockDelay=300;
-int AutoLock=300;
+int lockDelay=300;
+int autoLock=300;
 
 FILE *logFile;
 FILE *auditFile;
@@ -58,26 +58,26 @@ pthread_mutex_t audit_mutex;
 
 void sig_handler(int signo)
 {
-	WriteLog(DEBUG,"Received signal %i",signo);
+	writeLog(DEBUG,"sig_handler","","Received signal %i",signo);
 	if (signo==SIGUSR1)
 	{
 		pthread_mutex_lock(&audit_mutex);
-		CloseAudit();
-		OpenAudit();
+		closeAudit();
+		openAudit();
 		pthread_mutex_unlock(&audit_mutex);
 	}
 	/*else if (signo==SIGUSR2)
 	{
 		pthread_mutex_lock(&log_mutex);
-		CloseLog();
-		OpenLog();
+		closeLog();
+		openLog();
 		pthread_mutex_unlock(&log_mutex);
 	}*/
 
 }
 
 
-void InitLog()
+void initLog()
 {
 
 	pthread_mutex_init(&log_mutex,NULL);
@@ -96,15 +96,17 @@ void InitLog()
 	}*/
 }
 
-void DisposeLog()
+void disposeLog()
 {
 	pthread_mutex_destroy(&log_mutex);
 	pthread_mutex_destroy(&audit_mutex);
 }
 
-void OpenLog()
+void openLog()
 {
-    if (FileExists("/var/log/WORM.log")==1) RenameLog();
+    int result;
+
+    if (fileExists("/var/log/WORM.log")==1) renameLog();
 
     currentLogFileLines=0;
 	logFile = fopen("/var/log/WORM.log", "w");
@@ -113,19 +115,21 @@ void OpenLog()
 		perror("Failed to create log file");
 		exit(EXIT_FAILURE);
 	}
- 	setvbuf(logFile, NULL, _IOLBF, 0);//*/
- 	//WriteLog(DEBUG,"Default retention=%i",DefaultRetention);
-
+ 	result=setvbuf(logFile, NULL, _IOLBF, 0);//*/
+    if (result!=0)
+    {
+ 		perror("Failed to set log file buffer");
+   }
 }
 
 
-void CloseLog()
+void closeLog()
 {
 	fclose(logFile);
-    RenameLog();
+    renameLog();
 }
 
-void RenameLog()
+void renameLog()
 {
 	long long now;
 	char fileName[PATH_MAX];
@@ -137,16 +141,16 @@ void RenameLog()
 
 }
 
-void LogEnter(const char *FuncName)
+void logEnter(const char* funcName,const char* path)
 {
-	WriteLog(DEBUG,"Enter function %s",FuncName);
+	writeLog(funcName,path,DEBUG,"Entering..." );
 }
 /*void LogExit(const char *Function)
 {
-	WriteLog(DEBUG,"Exit function %s",Function);
+	writeLog(DEBUG,"Exit function %s",Function);
 }*/
 
-void WriteLog(const char *ErrorLevel,const char *format, ...)
+void writeLog(const char* funcName,const char* path,const char *errorLevel,const char *format, ...)
 {
 	va_list ap;
 	time_t now;
@@ -159,43 +163,41 @@ void WriteLog(const char *ErrorLevel,const char *format, ...)
     strcpy(buf,ctime(&now));
     buf[strlen(buf)-1]='\0';
 
-	fprintf(logFile,"%s|%hhu|%s|",buf,ID,ErrorLevel);
+	fprintf(logFile,"%s|%hhu|%s|%s|",buf,ID,errorLevel,funcName);
 
 	va_start(ap, format);
 	vfprintf(logFile, format, ap);
 	va_end(ap);
 
-	fprintf(logFile,"\n");
+	fprintf(logFile,"|%s\n",path);
 	fflush(logFile);
+
+
+    currentLogFileLines++;
+    if (currentLogFileLines==maxLogFileLines)
+    {
+        closeLog();
+        openLog();
+    }
 
 	pthread_mutex_unlock(&log_mutex);
 
-    currentLogFileLines++;
-    if (currentLogFileLines==MaxLogFileLines)
-    {
-        CloseLog();
-        OpenLog();
-    }
-
-
 }
 
-int WriteErrorNumber(const char *LogLevel)
+int writeErrorNumber(const char* funcName,const char* path)
 {
-	int result = -errno;
-
-    WriteLog(LogLevel, "Returned error is (%i: %s)", errno, strerror(errno));
-
-    return result;
+    writeLog(funcName,path, ERROR,"Returned error is (%i: %s)", errno, strerror(errno));
+	return -errno;
 }
 
 
-void OpenAudit()
+void openAudit()
 {
+    int result;
 
-    if (WriteAuditFiles==0) return;
+    if (writeAuditFiles==0) return;
 
-	if (FileExists("/var/log/WORM_Audit.log")==1) RenameAudit();
+	if (fileExists("/var/log/WORM_Audit.log")==1) renameAudit();
 
     currentAuditFileLines=0;
 	auditFile = fopen("/var/log/WORM_Audit.log", "w");
@@ -204,11 +206,14 @@ void OpenAudit()
 		perror("Failed to create audit file");
 		exit(EXIT_FAILURE);
 	}
- 	setvbuf(auditFile, NULL, _IOLBF, 0);//*/
-
+ 	result=setvbuf(auditFile, NULL, _IOLBF, 0);//*/
+    if (result!=0)
+    {
+        perror("Failed to set audit file buffer");
+    }
 }
 
-void RenameAudit()
+void renameAudit()
 {
 	long long now;
 	char fileName[PATH_MAX];
@@ -219,20 +224,20 @@ void RenameAudit()
 	rename("/var/log/WORM_Audit.log",fileName);
 }
 
-void CloseAudit()
+void closeAudit()
 {
-    if (WriteAuditFiles==0) return;
+    if (writeAuditFiles==0) return;
 
 	fclose(auditFile);
-    RenameAudit();
+    renameAudit();
 
 }
-void WriteAudit(const char *Action,const char *Entity,const char* Result,const char* Path,const char *Value)
+void writeAudit(const char *action,const char *entity,const char* result,const char* path,const char *value)
 {
 	long long now;
 	struct fuse_context *context;
 
-    if (WriteAuditFiles==0) return;
+    if (writeAuditFiles==0) return;
 
 	pthread_mutex_lock(&audit_mutex);
 
@@ -240,44 +245,45 @@ void WriteAudit(const char *Action,const char *Entity,const char* Result,const c
 
 	now=time(NULL);
 
-	fprintf(auditFile,"%llu|%hhu|%s|%s|%s|%s|%s|%i|%i\n",now,ID,Action,Entity,Result,Path,Value,context->uid,context->gid);
+	fprintf(auditFile,"%llu|%hhu|%s|%s|%s|%s|%s|%i|%i\n",now,ID,action,entity,result,path,value,context->uid,context->gid);
 
 	fflush(auditFile);
 
 
-	pthread_mutex_unlock(&audit_mutex);
 
     currentAuditFileLines++;
-    if (currentAuditFileLines==MaxAuditFileLines)
+    if (currentAuditFileLines==maxAuditFileLines)
     {
-        CloseAudit();
-        OpenAudit();
+        closeAudit();
+        openAudit();
     }
 
+	pthread_mutex_unlock(&audit_mutex);
+
 }
-void AuditSuccess(const char *Action,const char *Entity,const char* Path,const char *Format, ...)
+void auditSuccess(const char *action,const char *entity,const char* path,const char *format, ...)
 {
 	va_list ap;
 	char message[PATH_MAX];
 
-    if (WriteAuditFiles==0) return;
+    if (writeAuditFiles==0) return;
 
-	va_start(ap, Format);
-	vsprintf(message,Format,ap);
+	va_start(ap, format);
+	vsprintf(message,format,ap);
 	va_end(ap);
 
-	WriteAudit(Action,Entity,SUCCESS,Path,message);
+	writeAudit(action,entity,SUCCESS,path,message);
 }
-void AuditFailure(const char *Action,const char *Entity,const char* Path,const char *Format, ...)
+void auditFailure(const char *action,const char *entity,const char* path,const char *format, ...)
 {
 	va_list ap;
 	char message[PATH_MAX];
 
-    if (WriteAuditFiles==0) return;
+    if (writeAuditFiles==0) return;
 
-	va_start(ap, Format);
-	vsprintf(message,Format,ap);
+	va_start(ap, format);
+	vsprintf(message,format,ap);
 	va_end(ap);
 
-	WriteAudit(Action,Entity,FAILURE,Path,message);
+	writeAudit(action,entity,FAILURE,path,message);
 }

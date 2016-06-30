@@ -1,7 +1,7 @@
-#include "Link.h"
-#include "Logger.h"
-#include "Utils.h"
-#include "Retention.h"
+#include "link.h"
+#include "logger.h"
+#include "utils.h"
+#include "retention.h"
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,23 +13,23 @@ int WORM_readlink(const char *path, char *link, size_t size)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
-    LogEnter("WORM_readlink");
-    ConvertPath(convertedPath, path);
-    
-    WriteLog(DEBUG,"Try to read link, path %s",convertedPath);
+
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
+
+    writeLog(__func__, path,INFO, "Try to read link");
     returnStatus = readlink(convertedPath, link, size - 1);
-    if (returnStatus < 0) 
+    if (returnStatus < 0)
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot read link, path %s",convertedPath);
+       returnStatus = writeErrorNumber(__func__, path);
 	}
-    else  
+    else
     {
-		link[returnStatus] = '\0';
+		link[returnStatus] = '\0';  // this part is required because readlink doesn't return ending char. Fuse requires it.
 		returnStatus = 0;
     }
     
+
     return returnStatus;
 }
 
@@ -38,31 +38,30 @@ int WORM_unlink(const char *path)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
-    
-    LogEnter("WORM_unlink");
-    ConvertPath(convertedPath, path);
-        
-    if (IsExpired(convertedPath)==false)
+
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
+
+    writeLog(__func__,path,INFO,"Checking expiration");
+    if (isExpired(__func__,convertedPath) == 0)
     {
-		returnStatus=WriteErrorNumber(WARN);
-		WriteLog(WARN,"Media is not expired");
-		AuditFailure(DELETE,cFILE,path,NOTEXPIRED);
-		return returnStatus;
+        writeLog(__func__,path,WARN, "Media is not expired");
+		auditFailure(DELETE,cFILE,path,NOTEXPIRED);
+		return -EACCES;
 	}
-	
-    WriteLog(DEBUG,"Try to unlink target, path %s",convertedPath);
+
+    writeLog(__func__, path,INFO, "Try to unlink target");
     returnStatus = unlink(convertedPath);
-    if (returnStatus < 0)
+    if (returnStatus != 0)
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot unlink target, path %s",convertedPath);
-		AuditFailure(DELETE,cFILE,path,NOK);
+        returnStatus = writeErrorNumber(__func__, path);
+		auditFailure(DELETE,cFILE,path,NOK);
 	}
 	else
 	{
-		AuditSuccess(DELETE,cFILE,path,OK);
+		auditSuccess(DELETE,cFILE,path,OK);
 	}
-	
+
     return returnStatus;
 }
 
@@ -74,18 +73,14 @@ int WORM_symlink(const char *path, const char *link)
 {
     int returnStatus = 0;
     char linkPath[PATH_MAX];
-    
-    LogEnter("WORM_symlink");
-    ConvertPath(linkPath, link);
-    
-    WriteLog(DEBUG,"Try to create sym link, path %s, link path %s",path,linkPath);
+
+    logEnter(__func__,path);
+    convertPath(linkPath, link);
+
+    writeLog(__func__, path,INFO, "Try to create link");
     returnStatus = symlink(path, linkPath);
-    if (returnStatus < 0) 
-    {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot create sym link, path %s, link path %s",path,linkPath);
-	}
-	
+ 	if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, link);
+
     return returnStatus;
 }
 
@@ -93,19 +88,15 @@ int WORM_link(const char *path, const char *newpath)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX], newConvertedPath[PATH_MAX];
-    
-    LogEnter("WORM_link");
-	ConvertPath(convertedPath, path);
-    ConvertPath(newConvertedPath, newpath);
-    
-    WriteLog(DEBUG,"Try to create hard link, path %s",convertedPath);
+
+    logEnter(__func__,path);
+ 	convertPath(convertedPath, path);
+    convertPath(newConvertedPath, newpath);
+
+    writeLog(__func__, path,INFO, "Try to create link");
     returnStatus = link(convertedPath, newConvertedPath);
-    if (returnStatus < 0) 
-    {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot create hard link, path %s",convertedPath);
-	}
-	
-    
+    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
+
+
     return returnStatus;
 }

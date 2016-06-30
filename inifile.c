@@ -11,92 +11,92 @@ static SectionDictionary* createDictionary()
     SectionDictionary* sectionDictionary;
 
     sectionDictionary=malloc(sizeof(SectionDictionary));
-    sectionDictionary->Count=0;
+    sectionDictionary->count=0;
     sectionDictionary->currentAllocation=5;
-    sectionDictionary->Items=malloc(sizeof(Section)*sectionDictionary->currentAllocation);
+    sectionDictionary->items=malloc(sizeof(Section)*sectionDictionary->currentAllocation);
 
     return sectionDictionary;
 }
 
-static Section* addSection(SectionDictionary* SectionDictionary)
+static Section* addSection(SectionDictionary* sectionDictionary)
 {
     Section* section;
     Section* result;
 
-    if (SectionDictionary->currentAllocation==SectionDictionary->Count)
+    if (sectionDictionary->currentAllocation==sectionDictionary->count)
     {
-        SectionDictionary->currentAllocation+=5;
-        result=realloc(SectionDictionary->Items,sizeof(Section)*SectionDictionary->currentAllocation);
+        sectionDictionary->currentAllocation+=5;
+        result=realloc(sectionDictionary->items,sizeof(Section)*sectionDictionary->currentAllocation);
         if (result==NULL) perror("Not enough memory");
-        else SectionDictionary->Items=result;
+        else sectionDictionary->items=result;
     }
 
-    section=&SectionDictionary->Items[SectionDictionary->Count];
-    section->Count=0;
+    section=&sectionDictionary->items[sectionDictionary->count];
+    section->count=0;
     section->currentAllocation=5;
-    section->Items=malloc(sizeof(KeyValuePair)*section->currentAllocation);
-    SectionDictionary->Count++;
+    section->items=malloc(sizeof(KeyValuePair)*section->currentAllocation);
+    sectionDictionary->count++;
 
     return section;
 }
 
-static KeyValuePair* addKeyValuePair(Section* Section)
+static KeyValuePair* addKeyValuePair(Section* section)
 {
     KeyValuePair* keyValuePair;
     KeyValuePair* result;
 
-    if (Section->currentAllocation==Section->Count)
+    if (section->currentAllocation==section->count)
     {
-        Section->currentAllocation+=5;
-        result=realloc(Section->Items,sizeof(KeyValuePair)*Section->currentAllocation);
+        section->currentAllocation+=5;
+        result=realloc(section->items,sizeof(KeyValuePair)*section->currentAllocation);
         if (result==NULL) perror("Not enough memory");
-        else Section->Items=result;
+        else section->items=result;
     }
 
-    keyValuePair=&Section->Items[Section->Count];
-    Section->Count++;
+    keyValuePair=&section->items[section->count];
+    section->count++;
 
     return keyValuePair;
 }
 
-void free_ini(SectionDictionary* SectionDictionary)
+void free_ini(SectionDictionary* sectionDictionary)
 {
     int t;
     int s;
     Section section;
     KeyValuePair keyValuePair;
 
-    for(t=0;t<SectionDictionary->Count;t++)
+    for(t=0;t<sectionDictionary->count;t++)
     {
-        section=SectionDictionary->Items[t];
-        free(section.Name);
-        for(s=0;s<section.Count;s++)
+        section=sectionDictionary->items[t];
+        free(section.name);
+        for(s=0;s<section.count;s++)
         {
-            keyValuePair=section.Items[s];
-            free(keyValuePair.Key);
-            free(keyValuePair.Value);
+            keyValuePair=section.items[s];
+            free(keyValuePair.key);
+            free(keyValuePair.value);
         }
-        free(section.Items);
+        free(section.items);
     }
 
-    free(SectionDictionary->Items);
-    free(SectionDictionary);
+    free(sectionDictionary->items);
+    free(sectionDictionary);
 }
-void dump_ini(SectionDictionary* SectionDictionary)
+void dump_ini(SectionDictionary* sectionDictionary)
 {
     int t;
     int s;
     Section section;
     KeyValuePair keyValuePair;
 
-    for(t=0;t<SectionDictionary->Count;t++)
+    for(t=0;t<sectionDictionary->count;t++)
     {
-        section=SectionDictionary->Items[t];
-        printf("[%s]\n",section.Name);
-        for(s=0;s<section.Count;s++)
+        section=sectionDictionary->items[t];
+        printf("[%s]\n",section.name);
+        for(s=0;s<section.count;s++)
         {
-            keyValuePair=section.Items[s];
-            printf("%s=%s\n",keyValuePair.Key,keyValuePair.Value);
+            keyValuePair=section.items[s];
+            printf("%s=%s\n",keyValuePair.key,keyValuePair.value);
          }
         printf("\n");
     }
@@ -104,7 +104,7 @@ void dump_ini(SectionDictionary* SectionDictionary)
 
 }
 
-SectionDictionary* open_ini(const char* FileName)
+SectionDictionary* open_ini(const char* fileName)
 {
     FILE *file;
     char* line;
@@ -115,7 +115,7 @@ SectionDictionary* open_ini(const char* FileName)
     Section* currentSection;
     KeyValuePair* keyValuePair;
 
-    file = fopen(FileName, "r");
+    file = fopen(fileName, "r");
     if (file==NULL)
     {
         perror("Cannot open ini file");
@@ -134,9 +134,9 @@ SectionDictionary* open_ini(const char* FileName)
 
 
     currentSection=addSection(dictionary);
-    currentSection->Name=malloc(sizeof(char)*8);
-    strncpy (currentSection->Name, "default", 7);
-    currentSection->Name[7]=0;
+    currentSection->name=malloc(sizeof(char)*8);
+    strncpy (currentSection->name, "default", 7);
+    currentSection->name[7]=0;
 
     while(fgets(line, MAXLINELENGTH, file)!=NULL)
     {
@@ -149,11 +149,11 @@ SectionDictionary* open_ini(const char* FileName)
             length = end - start;
 
             currentSection=addSection(dictionary);
-            currentSection->Name=malloc(sizeof(char)*length);
-            strncpy (currentSection->Name, line+start, length);
-            currentSection->Name[length]=0;
+            currentSection->name=malloc(sizeof(char)*length);
+            strncpy (currentSection->name, line+start, length);
+            currentSection->name[length]=0;
 
-            //printf("New section: %s\n",currentSection.Name);
+            //printf("New section: %s\n",currentSection.name);
             continue;
         }
         if (regexec(&keyRegex, line, 5, matches, 0)==0)    // new keyvalue pair
@@ -163,20 +163,20 @@ SectionDictionary* open_ini(const char* FileName)
             start = matches[1].rm_so;
             end = matches[1].rm_eo;
             length = end - start;
-            keyValuePair->Key=malloc(length+1);
-            strncpy (keyValuePair->Key, line+start, length);
-            keyValuePair->Key[length]=0;
+            keyValuePair->key=malloc(length+1);
+            strncpy (keyValuePair->key, line+start, length);
+            keyValuePair->key[length]=0;
 
 
             start = matches[2].rm_so;
             end = matches[2].rm_eo;
             if (line[start]=='"') { start++;end--;}
             length = end - start;
-            keyValuePair->Value=malloc(length+1);
-            if (length>0) strncpy (keyValuePair->Value, line+start, length);
-            keyValuePair->Value[length]=0;
+            keyValuePair->value=malloc(length+1);
+            if (length>0) strncpy (keyValuePair->value, line+start, length);
+            keyValuePair->value[length]=0;
 
-            //printf("New key value pair: %s / %s\n",keyValuePair.Key,keyValuePair.Value);
+            //printf("New key value pair: %s / %s\n",keyValuePair.key,keyValuePair.value);
             continue;
         }
 
@@ -198,74 +198,74 @@ SectionDictionary* open_ini(const char* FileName)
 
 }
 
-Section* ini_getSection(SectionDictionary *SectionDictionary, const char* Name)
+Section* ini_getSection(SectionDictionary *sectionDictionary, const char* name)
 {
     int t;
     Section* section;
 
-    for(t=0;t<SectionDictionary->Count;t++)
+    for(t=0;t<sectionDictionary->count;t++)
     {
-        section=&SectionDictionary->Items[t];
-        if (strcmp(section->Name,Name)==0) return section;
+        section=&sectionDictionary->items[t];
+        if (strcmp(section->name,name)==0) return section;
     }
 
     return NULL;
 }
-KeyValuePair* ini_getKeyValuePair(Section *Section, const char* Name)
+KeyValuePair* ini_getKeyValuePair(Section *section, const char* name)
 {
     int t;
     KeyValuePair* keyValuePair;
 
-    for(t=0;t<Section->Count;t++)
+    for(t=0;t<section->count;t++)
     {
-        keyValuePair=&Section->Items[t];
-        if (strcmp(keyValuePair->Key,Name)==0) return keyValuePair;
+        keyValuePair=&section->items[t];
+        if (strcmp(keyValuePair->key,name)==0) return keyValuePair;
     }
 
     return NULL;
 }
 
-char* ini_getString(SectionDictionary *SectionDictionary, const char* SectionName,const char* KeyName,char* Default)
+char* ini_getString(SectionDictionary *sectionDictionary, const char* sectionName,const char* keyName,char* defaultValue)
 {
     Section* section;
     KeyValuePair* keyValuePair;
 
-    section=ini_getSection(SectionDictionary,SectionName);
-    if (section==NULL) return Default;
-    keyValuePair=ini_getKeyValuePair(section,KeyName);
-    if (keyValuePair==NULL) return Default;
+    section=ini_getSection(sectionDictionary,sectionName);
+    if (section==NULL) return defaultValue;
+    keyValuePair=ini_getKeyValuePair(section,keyName);
+    if (keyValuePair==NULL) return defaultValue;
 
-    return keyValuePair->Value;
+    return keyValuePair->value;
 
 }
 
-int ini_getInt(SectionDictionary *SectionDictionary, const char* SectionName,const char* KeyName,int Default)
+int ini_getInt(SectionDictionary *sectionDictionary, const char* sectionName,const char* keyName,int defaultValue)
 {
     Section* section;
     KeyValuePair* keyValuePair;
     int result;
 
-    section=ini_getSection(SectionDictionary,SectionName);
-    if (section==NULL) return Default;
-    keyValuePair=ini_getKeyValuePair(section,KeyName);
-    if (keyValuePair==NULL) return Default;
+    section=ini_getSection(sectionDictionary,sectionName);
+    if (section==NULL) return defaultValue;
+    keyValuePair=ini_getKeyValuePair(section,keyName);
+    if (keyValuePair==NULL) return defaultValue;
 
-    if (sscanf(keyValuePair->Value, "%d", &result)==1) return result;
-    else return Default;
+    if (sscanf(keyValuePair->value, "%d", &result)==1) return result;
+    else return defaultValue;
 
 }
-unsigned short ini_getUnsignedShort(SectionDictionary *SectionDictionary, const char* SectionName,const char* KeyName,unsigned short Default)
+unsigned short ini_getUnsignedShort(SectionDictionary *sectionDictionary, const char* sectionName,const char* keyName,unsigned short defaultValue)
 {
     Section* section;
     KeyValuePair* keyValuePair;
     unsigned short result;
 
-    section=ini_getSection(SectionDictionary,SectionName);
-    if (section==NULL) return Default;
-    keyValuePair=ini_getKeyValuePair(section,KeyName);
-    if (keyValuePair==NULL) return Default;
+    section=ini_getSection(sectionDictionary,sectionName);
+    if (section==NULL) return defaultValue;
+    keyValuePair=ini_getKeyValuePair(section,keyName);
+    if (keyValuePair==NULL) return defaultValue;
 
-    if (sscanf(keyValuePair->Value, "%hu", &result)==1) return result;
-    else return Default;
+    if (sscanf(keyValuePair->value, "%hu", &result)==1) return result;
+    else return defaultValue;
 
 }

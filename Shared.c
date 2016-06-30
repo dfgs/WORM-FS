@@ -1,7 +1,7 @@
-#include "Shared.h"
-#include "Logger.h"
-#include "Utils.h"
-#include "Retention.h"
+#include "shared.h"
+#include "logger.h"
+#include "utils.h"
+#include "retention.h"
 #include <stdio.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -24,30 +24,28 @@ int WORM_rename(const char *path, const char *newpath)
     char convertedPath[PATH_MAX];
     char newConvertedPath[PATH_MAX];
 
-    LogEnter("WORM_rename");
-    ConvertPath(convertedPath, path);
-    ConvertPath(newConvertedPath, newpath);
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
+    convertPath(newConvertedPath, newpath);
 
-    WriteLog(DEBUG,"Try to get expiration, path %s",convertedPath);
-    if (IsExpired(convertedPath)==false)
+    writeLog(__func__,path,INFO,"Checking expiration");
+    if (isExpired(__func__,convertedPath)==0)
     {
-		returnStatus=WriteErrorNumber(WARN);
-		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
-		AuditFailure(UPDATE,LOCATION,path,NOTEXPIRED);
-		return returnStatus;
+        writeLog(__func__,path,WARN, "Media is not expired");
+		auditFailure(UPDATE,LOCATION,path,NOTEXPIRED);
+		return -EACCES;
 	}
 
-    WriteLog(DEBUG,"Try to rename, path %s",convertedPath);
+    writeLog(__func__,path,INFO,"Try to rename");
     returnStatus = rename(convertedPath, newConvertedPath);
-    if (returnStatus < 0)
+    if (returnStatus != 0)
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot rename file, path %s",convertedPath);
-		AuditFailure(UPDATE,LOCATION,path,NOK);
+		returnStatus = writeErrorNumber(__func__, path);
+		auditFailure(UPDATE,LOCATION,path,NOK);
 	}
 	else
 	{
-		AuditSuccess(UPDATE,LOCATION,path,newpath);
+		auditSuccess(UPDATE,LOCATION,path,newpath);
 	}
 
     return returnStatus;
@@ -59,29 +57,27 @@ int WORM_chown(const char *path, uid_t uid, gid_t gid)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    LogEnter("WORM_chown");
-    ConvertPath(convertedPath, path);
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
 
-    WriteLog(DEBUG,"Try to get expiration, path %s",convertedPath);
-    if (IsExpired(convertedPath)==false)
+    writeLog(__func__,path,INFO,"Checking expiration");
+    if (isExpired(__func__,convertedPath)==0)
     {
-		returnStatus=WriteErrorNumber(WARN);
-		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
-		AuditFailure(UPDATE,OWNER,path,NOTEXPIRED);
-		return returnStatus;
+        writeLog(__func__,path,WARN, "Media is not expired");
+		auditFailure(UPDATE,OWNER,path,NOTEXPIRED);
+		return -EACCES;
 	}
 
-    WriteLog(DEBUG,"Try to change owner, path %s",convertedPath);
+    writeLog(__func__,path,INFO,"Try to change owner");
     returnStatus = chown(convertedPath, uid, gid);
-    if (returnStatus < 0)
+    if (returnStatus != 0)
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot change owner, path %s",convertedPath);
-		AuditFailure(UPDATE,OWNER,path,NOK);
+		returnStatus = writeErrorNumber(__func__, path);
+		auditFailure(UPDATE,OWNER,path,NOK);
 	}
 	else
 	{
-		AuditSuccess(UPDATE,OWNER,path,OK);
+		auditSuccess(UPDATE,OWNER,path,OK);
 	}
 
     return returnStatus;
@@ -93,33 +89,27 @@ int WORM_chmod(const char *path, mode_t mode)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    LogEnter("WORM_chmod");
-    ConvertPath(convertedPath, path);
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
 
-    WriteLog(DEBUG,"Try to get expiration, path %s",convertedPath);
-    if (IsExpired(convertedPath)==false)
+    writeLog(__func__,path,INFO,"Checking expiration");
+    if (isExpired(__func__,convertedPath)==0)
     {
-		returnStatus=WriteErrorNumber(WARN);
-		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
-		AuditFailure(UPDATE,MODE,path,NOTEXPIRED,"%i",mode);
-		return returnStatus;
+        writeLog(__func__,path,WARN, "Media is not expired");
+		auditFailure(UPDATE,MODE,path,NOTEXPIRED,"%i",mode);
+		return -EACCES;
 	}
 
-    WriteLog(DEBUG,"Try to change access mode, path %s, mode %i",convertedPath,mode);
+    writeLog(__func__,path,INFO,"Try to change access mode");
     returnStatus = chmod(convertedPath, mode);
-    if (returnStatus < 0)
+    if (returnStatus != 0)
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot change access mode, path %s",convertedPath);
-		AuditFailure(UPDATE,MODE,path,NOK,"%i",mode);
+		returnStatus = writeErrorNumber(__func__, path);
+		auditFailure(UPDATE,MODE,path,NOK,"%i",mode);
 	}
 	else
 	{
-		AuditSuccess(UPDATE,MODE,path,OK,"%i",mode);
-		if ( ((mode & 146)==0) && (AutoLock==0))
-		{
-            SetExpirationDate(path,convertedPath);
-		}
+		auditSuccess(UPDATE,MODE,path,OK,"%i",mode);
 	}
     return returnStatus;
 }
@@ -129,31 +119,39 @@ int WORM_utime(const char *path, struct utimbuf *ubuf)
 {
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
+    char accessTime[20];
+    time_t expirationDate;
 
-    LogEnter("WORM_utime");
-    ConvertPath(convertedPath, path);
-
-    WriteLog(DEBUG,"Try to get expiration, path %s",convertedPath);
-    if (IsExpired(convertedPath)==false)
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
+  
+    if (isExpired(__func__,convertedPath)==0)
     {
-		returnStatus=WriteErrorNumber(WARN);
-		WriteLog(WARN,"Media is not expired, path %s",convertedPath);
-		AuditFailure(UPDATE,TIME,path,NOTEXPIRED);
-		return returnStatus;
+		writeLog(__func__,path,WARN,"Media is not expired");
+		auditFailure(UPDATE,TIME,path,NOTEXPIRED);
+		return -EACCES;
 	}
 
-    WriteLog(DEBUG,"Try to change time values, path %s",convertedPath);
-    returnStatus = utime(convertedPath, ubuf);
-    if (returnStatus < 0)
+    if ((isReadOnly(convertedPath)>0) && (autoLock==0))
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot change time values, path %s",convertedPath);
-		AuditFailure(UPDATE,TIME,path,NOK);
+        convertTime(ubuf->actime,accessTime,20);
+        writeLog(__func__,path,INFO,"File is read only setting expiration date %s on file",accessTime);
+        setExpirationDateExplicit(__func__,path,convertedPath,ubuf->actime);
+        return 0;
+    }
+
+    writeLog(__func__,path,INFO,"Try to change time value");
+    returnStatus = utime(convertedPath, ubuf);
+    if (returnStatus != 0)
+    {
+		returnStatus = writeErrorNumber(__func__, path);
+		auditFailure(UPDATE,TIME,path,NOK);
 	}
 	else
 	{
-		AuditSuccess(UPDATE,TIME,path,OK);
+		auditSuccess(UPDATE,TIME,path,OK);
 	}
+    
     return returnStatus;
 }
 
@@ -162,16 +160,12 @@ int WORM_statfs(const char *path, struct statvfs *statv)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    LogEnter("WORM_statfs");
-    ConvertPath(convertedPath, path);
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
 
-    WriteLog(DEBUG,"Try to get file stats, path %s",convertedPath);
+    writeLog(__func__,path,INFO,"Try to get file stats");
     returnStatus = statvfs(convertedPath, statv);
-    if (returnStatus < 0)
-    {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot get file stats, path %s",convertedPath);
-	}
+    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
 
 
     return returnStatus;
@@ -182,17 +176,13 @@ int WORM_fsync(const char *path, int datasync, struct fuse_file_info *fi)
 {
     int returnStatus = 0;
 
-    LogEnter("WORM_fsync");
+    logEnter(__func__,path);
 
-    WriteLog(DEBUG,"Try to fsync from file_info");
+    writeLog(__func__,path,INFO,"Try to fsync from file_info");
     if (datasync) returnStatus = fdatasync(fi->fh);
     else returnStatus = fsync(fi->fh);
 
-    if (returnStatus < 0)
-    {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot fsync from file_info");
-	}
+    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
 
     return returnStatus;
 }
@@ -203,17 +193,16 @@ int WORM_access(const char *path, int mask)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    LogEnter("WORM_access");
-    ConvertPath(convertedPath, path);
+    logEnter(__func__,path);
+    convertPath(convertedPath, path);
 
-    WriteLog(DEBUG,"Try to get access, path %s",convertedPath);
+    writeLog(__func__,path,INFO,"Try to get access");
     returnStatus = access(convertedPath, mask);
-    if (returnStatus < 0)
+    if (returnStatus != 0)
     {
-		returnStatus = WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot get access, path %s",convertedPath);
+		returnStatus = writeErrorNumber(__func__, path);
 	}
-	returnStatus=GetReadOnlyMode(convertedPath,returnStatus);
+	else returnStatus=getReadOnlyMode(__func__, convertedPath,returnStatus);
 
     return returnStatus;
 }

@@ -1,6 +1,6 @@
-#include "Utils.h"
-#include "Logger.h"
-#include "Retention.h"
+#include "utils.h"
+#include "logger.h"
+#include "retention.h"
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
@@ -14,49 +14,68 @@
 #include <dirent.h>
 
 
-
-void ConvertPath(char *DestPath, const char *OriginalPath)
+void convertTime(time_t time,char *buffer,int bufferSize)
 {
-	//LogEnter("ConvertPath");
-    strcpy(DestPath, repositoryPath);
-    strncat(DestPath, OriginalPath, PATH_MAX); // ridiculously long paths will break here
+    struct stat info;
+    struct tm * timeinfo;
 
-    //WriteLog("ConvertPath:  rootdir = %s, original path = %s, converted path = %s",rootDir, OriginalPath, DestPath);
+    timeinfo = localtime(&time);
+    strftime(buffer, bufferSize, "%Y-%m-%d %H:%M:%S", timeinfo);
 }
 
-void SetRealOwnerID(const char *Path)
+void convertPath(char *destPath, const char *originalPath)
+{
+	//logEnter("convertPath");
+    strcpy(destPath, repositoryPath);
+    strncat(destPath, originalPath, PATH_MAX); // ridiculously long paths will break here
+
+    //writeLog("Convert path",originalPath,DEBUG, "convertPath:  rootdir = %s, original path = %s, converted path = %s",repositoryPath, originalPath, destPath);
+}
+
+void setRealOwnerID(const char* funcName,const char *path)
 {
 	int returnStatus;
 
 	struct fuse_context *context;
-	LogEnter("SetRealOwnerID");
-
+    logEnter(__func__,path);
+	
 	context=fuse_get_context();
-	WriteLog(DEBUG,"Try to update fs entry owner from pid=%i to uid=%i/gid=%i, path %s",context->pid, context->uid,context->gid, Path);
-	returnStatus=chown(Path,context->uid,context->gid);
-	if (returnStatus<0)
-	{
-		returnStatus=WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot update fs entry owner with uid/gid, path %s",Path);
-	}
+	writeLog(funcName,path,DEBUG,"Try to update fs entry owner from pid=%i to uid=%i/gid=%i",context->pid, context->uid,context->gid);
+	returnStatus=chown(path,context->uid,context->gid);
+	if (returnStatus<0) returnStatus = writeErrorNumber(__func__, path);
+
 }
 
-int GetReadOnlyMode(const char *Path,int Mode)
+int getReadOnlyMode(const char* funcName,const char *path,int mode)
 {
-	if (S_ISDIR(Mode)!=0) return Mode;
-
-	if (IsExpired(Path)==false)
+	if (S_ISDIR(mode)!=0) return mode;
+	
+	if (isExpired(funcName,path) == 0)
 	{
-		//WriteLog(DEBUG,"Change mode from %i to %i (readonly)",Mode,Mode & 65389);
-		return Mode & 65389;
+		//writeLog(DEBUG,"Change mode from %i to %i (readonly)",Mode,Mode & 65389);
+		return mode & 65389;
 	}
-	else return Mode;
+	else return mode;
 }
-int FileExists(const char *Path)
+int isReadOnly(const char *path)
+{
+    int returnStatus = 0;
+    struct stat statbuf;
+
+    returnStatus = lstat(path, &statbuf);
+    if (returnStatus != 0)
+    {
+        returnStatus = writeErrorNumber(__func__, path);
+        return 0;
+    }
+    return  (statbuf.st_mode & (S_IWUSR  | S_IWGRP | S_IWOTH))==0;
+
+}
+int fileExists(const char *path)
 {
     FILE* file;
 
-    file = fopen(Path, "r");
+    file = fopen(path, "r");
 	if (file != NULL)
 	{
         fclose(file);
@@ -64,9 +83,9 @@ int FileExists(const char *Path)
 	}
 	return 0;
 }
-int DirectoryExists(const char *Path)
+int directoryExists(const char *path)
 {
-	DIR* dir = opendir(Path);
+	DIR* dir = opendir(path);
 	if (dir)
 	{
 		closedir(dir);
@@ -75,15 +94,11 @@ int DirectoryExists(const char *Path)
 	else return 0;
 
 }
-int CreateDirectory(const char *Path)
+int createDirectory(const char* funcName,const char *path)
 {
 	int returnStatus;
 
-	returnStatus = mkdir(Path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	if (returnStatus != 0)
-    {
-		returnStatus=WriteErrorNumber(ERROR);
-		WriteLog(ERROR,"Cannot create directory, path %s",Path);
-	}
+	returnStatus = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if (returnStatus != 0) returnStatus = writeErrorNumber(funcName, path);
 	return returnStatus;
 }
