@@ -287,14 +287,14 @@ if (($#ARGV + 1 > 0) && ($ARGV[0]=="-v"))
 
 
 print("Config backup\n");
-`sudo mv /etc/WORM.conf /etc/WORM.old`;
+`sudo mv /etc/worm.conf /etc/worm.old`;
 
 
 print("Copy config with autolock\n");
-`sudo cp TestWithAutoCommit.conf /etc/WORM.conf`;
+`sudo cp TestWithAutoCommit.conf /etc/worm.conf`;
 
 print("Restart service\n");
-`sudo systemctl restart WORM`;
+`sudo systemctl restart worm`;
 
 	
 print("Creating test directory\n");
@@ -308,10 +308,10 @@ print("Cleanning directories\n");
 
 
 print("Copy config without autolock\n"); 
-`sudo cp TestWithoutAutoCommit.conf /etc/WORM.conf`;
+`sudo cp TestWithoutAutoCommit.conf /etc/worm.conf`;
 
 print("Restart service\n");
-`sudo systemctl restart WORM`;
+`sudo systemctl restart worm`;
 
 	
 print("Creating test directory\n");
@@ -324,9 +324,9 @@ print("Cleanning directories\n");
 `rm -rf /tmp/Test`;
 
 print("Config restore\n");
-`sudo rm /etc/WORM.conf`;
+`sudo rm /etc/worm.conf`;
 
-`sudo mv /etc/WORM.old /etc/WORM.conf`;
+`sudo mv /etc/worm.old /etc/worm.conf`;
 
 
 print "\n";
