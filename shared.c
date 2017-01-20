@@ -125,6 +125,25 @@ int WORM_utime(const char *path, struct utimbuf *ubuf)
     logEnter(__func__,path);
     convertPath(convertedPath, path);
   
+  
+	if ((isReadOnly(convertedPath)>0) && (autoLock==0))
+    {
+        convertTime(ubuf->actime,accessTime,20);
+		expirationDate=getExpirationDate(__func__,convertedPath);
+		if (ubuf->actime > expirationDate) 
+		{
+			writeLog(__func__,path,INFO,"File is read only setting expiration date %s on file",accessTime);
+			setExpirationDateExplicit(__func__,path,convertedPath,ubuf->actime);
+			return 0;
+		}
+		else
+		{
+			writeLog(__func__,path,WARN,"Cannot set lower expiration date %s on file",accessTime);
+			auditFailure(UPDATE,TIME,path,NOTEXPIRED);
+			return -EACCES;
+		}
+    }
+	
     if (isExpired(__func__,convertedPath)==0)
     {
 		writeLog(__func__,path,WARN,"Media is not expired");
@@ -132,13 +151,7 @@ int WORM_utime(const char *path, struct utimbuf *ubuf)
 		return -EACCES;
 	}
 
-    if ((isReadOnly(convertedPath)>0) && (autoLock==0))
-    {
-        convertTime(ubuf->actime,accessTime,20);
-        writeLog(__func__,path,INFO,"File is read only setting expiration date %s on file",accessTime);
-        setExpirationDateExplicit(__func__,path,convertedPath,ubuf->actime);
-        return 0;
-    }
+    
 
     writeLog(__func__,path,INFO,"Try to change time value");
     returnStatus = utime(convertedPath, ubuf);

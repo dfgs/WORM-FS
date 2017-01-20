@@ -1,6 +1,8 @@
 #ifndef _Logger_
 #define _Logger_
 
+#include <limits.h>
+
 //extern int MaxLinesInLogFiles;
 
 
@@ -36,6 +38,10 @@ extern int maxAuditFileLines;
 extern int writeAuditFiles;
 extern int lockDelay;
 extern int autoLock;
+extern char* auditFilePath;
+
+extern char auditFileName[PATH_MAX];
+extern char logFileName[PATH_MAX];
 
 //void StartAuditTimer();
 //void StopAuditTimer();

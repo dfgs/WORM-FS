@@ -4,22 +4,30 @@ use strict;
 use warnings;
 use Linux::UserXAttr qw/:all/;
 use Filesys::Statvfs;
-  
+use Term::ANSIColor;
+
 my $passed;
 my $failed;
 my $autoLock;
+my $verbose;
 
 sub assert {
 	my ($test,$received,$shouldFail) = @_;
 
+	
 	if ($received xor $shouldFail)
 	{
-		print "$test: PASSED\n";
+		if ($verbose) {
+			print "$test: ";
+			print color("green"), "PASSED\n", color("reset");
+		}
+			
 		$passed++;
 	}
 	else
 	{
-		print "$test: FAILED\n";
+			print "$test: ";
+			print color("red"), "FAILED\n", color("reset");
 		$failed++;
 	}
 }
@@ -86,8 +94,11 @@ sub testWriteOnly {
 
 	assert("Set extended attribute", setxattr($path,"user.Test",1234),$shouldFail);
 	assert("Remove extended attribute", removexattr($path,"user.Retention"),$shouldFail);
-	assert("Change access/modification time", utime(0,0,$path),$shouldFail);
+	assert("Change access/modification time (decrease)", utime(0,0,$path),$shouldFail);
+	assert("Change access/modification time (increase)", utime(time + 10 * 24 * 60 * 60 ,0,$path),$shouldFail & $autoLock);
+		
 
+	
 	assert ("Change mod" , chmod("777",$path),$shouldFail); 
 	assert ("Change own" , chown($<,$(,$path),$shouldFail); 
 	
@@ -264,47 +275,55 @@ sub testAll {
 }
 
 
-$passed=0;$failed=0;
+$passed=0;$failed=0;$verbose = 0;
+
+if (($#ARGV + 1 > 0) && ($ARGV[0]=="-v")) 
+{
+	$verbose=1;
+}
 
 
-print("Config backup");
+
+
+
+print("Config backup\n");
 `sudo mv /etc/WORM.conf /etc/WORM.old`;
 
 
-print("Copy config with autolock");
+print("Copy config with autolock\n");
 `sudo cp TestWithAutoCommit.conf /etc/WORM.conf`;
 
-print("Restart service");
+print("Restart service\n");
 `sudo systemctl restart WORM`;
 
 	
-print("Creating test directory");
+print("Creating test directory\n");
 mkdir("/mnt/WORM/Test") or warn "Cannot create Test directory";
 
 $autoLock=1;
 testAll("/mnt/WORM/Test");
 
-print("Cleanning directories");
+print("Cleanning directories\n");
 `rm -rf /tmp/Test`;
 
 
-print("Copy config without autolock"); 
+print("Copy config without autolock\n"); 
 `sudo cp TestWithoutAutoCommit.conf /etc/WORM.conf`;
 
-print("Restart service");
+print("Restart service\n");
 `sudo systemctl restart WORM`;
 
 	
-print("Creating test directory");
+print("Creating test directory\n");
 mkdir("/mnt/WORM/Test") or warn "Cannot create Test directory";
 
 $autoLock=0;
 testAll("/mnt/WORM/Test");
 
-print("Cleanning directories");
+print("Cleanning directories\n");
 `rm -rf /tmp/Test`;
 
-print("Config restore");
+print("Config restore\n");
 `sudo rm /etc/WORM.conf`;
 
 `sudo mv /etc/WORM.old /etc/WORM.conf`;

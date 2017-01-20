@@ -50,7 +50,11 @@ static int currentLogFileLines;
 static int currentAuditFileLines;
 int lockDelay=300;
 int autoLock=300;
+char *auditFilePath;
+char auditFileName[PATH_MAX];
+char logFileName[PATH_MAX];
 
+	
 FILE *logFile;
 FILE *auditFile;
 pthread_mutex_t log_mutex;
@@ -106,10 +110,10 @@ void openLog()
 {
     int result;
 
-    if (fileExists("/var/log/WORM.log")==1) renameLog();
+    if (fileExists(logFileName)==1) renameLog();
 
     currentLogFileLines=0;
-	logFile = fopen("/var/log/WORM.log", "w");
+	logFile = fopen(logFileName, "w");
 	if (logFile == NULL)
 	{
 		perror("Failed to create log file");
@@ -132,12 +136,12 @@ void closeLog()
 void renameLog()
 {
 	long long now;
-	char fileName[PATH_MAX];
+	char newFileName[PATH_MAX];
 
 	now=time(NULL);
-	sprintf(fileName,"/var/log/WORM-%llu.log",now);
+	sprintf(newFileName,"/var/log/WORM-%llu.log",now);
 
-	rename("/var/log/WORM.log",fileName);
+	rename(logFileName,newFileName);
 
 }
 
@@ -195,12 +199,12 @@ void openAudit()
 {
     int result;
 
-    if (writeAuditFiles==0) return;
+    if (!writeAuditFiles) return;
 
-	if (fileExists("/var/log/WORM_Audit.log")==1) renameAudit();
+	if (fileExists(auditFileName)==1) renameAudit();
 
     currentAuditFileLines=0;
-	auditFile = fopen("/var/log/WORM_Audit.log", "w");
+	auditFile = fopen(auditFileName, "w");
 	if (logFile == NULL)
 	{
 		perror("Failed to create audit file");
@@ -216,51 +220,47 @@ void openAudit()
 void renameAudit()
 {
 	long long now;
-	char fileName[PATH_MAX];
+	char newFileName[PATH_MAX];
 
 	now=time(NULL);
-	sprintf(fileName,"/var/log/WORM_Audit-%llu.log",now);
+	sprintf(newFileName,"%s/WORM_Audit-%llu.log",auditFilePath, now);
 
-	rename("/var/log/WORM_Audit.log",fileName);
+	rename(auditFileName,newFileName);
 }
 
 void closeAudit()
 {
-    if (writeAuditFiles==0) return;
+    if (!writeAuditFiles) return;
 
 	fclose(auditFile);
     renameAudit();
 
 }
+
 void writeAudit(const char *action,const char *entity,const char* result,const char* path,const char *value)
 {
 	long long now;
 	struct fuse_context *context;
 
-    if (writeAuditFiles==0) return;
-
+	if (!writeAuditFiles) return;
 	pthread_mutex_lock(&audit_mutex);
-
 	context=fuse_get_context();
-
 	now=time(NULL);
 
 	fprintf(auditFile,"%llu|%hhu|%s|%s|%s|%s|%s|%i|%i\n",now,ID,action,entity,result,path,value,context->uid,context->gid);
-
 	fflush(auditFile);
 
-
-
-    currentAuditFileLines++;
-    if (currentAuditFileLines==maxAuditFileLines)
-    {
-        closeAudit();
-        openAudit();
-    }
-
+	currentAuditFileLines++;
+	if (currentAuditFileLines==maxAuditFileLines)
+	{
+		closeAudit();
+		openAudit();
+	}
 	pthread_mutex_unlock(&audit_mutex);
-
+	
+	
 }
+
 void auditSuccess(const char *action,const char *entity,const char* path,const char *format, ...)
 {
 	va_list ap;
