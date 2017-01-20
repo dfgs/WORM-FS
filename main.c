@@ -39,7 +39,7 @@ char **newArgs;
 
 static void read_Conf()
 {
-    ini = open_ini("/etc/WORM.conf");
+    ini = open_ini("/etc/worm.conf");
     if (ini==NULL)
     {
 		perror("Failed to open configuration file");
@@ -54,8 +54,14 @@ static void read_Conf()
     lockDelay = ini_getInt(ini, "General","LockDelay", 300);
     autoLock = ini_getInt(ini, "General","AutoLock", 0);
     maxLogFileLines = ini_getInt(ini, "Logs","MaxLogFileLines", 100);
-    maxAuditFileLines = ini_getInt(ini, "Logs","MaxAuditFileLines", 100);
-    writeAuditFiles=ini_getInt(ini,"Logs","WriteAuditFiles",0);
+
+    writeAuditFiles=ini_getInt(ini,"Audit","WriteAuditFiles",0);
+    maxAuditFileLines = ini_getInt(ini, "Audit","MaxAuditFileLines", 100);
+    auditFilePath=ini_getString(ini,"Audit","AuditFilePath","/var/log");
+
+	sprintf(auditFileName,"%s/WORM_Audit.log",auditFilePath);
+	strcpy(logFileName,"/var/log/WORM.log");
+
 
 }
 static void free_Conf()
@@ -116,6 +122,7 @@ static void *WORM_init(struct fuse_conn_info *conn)
 	writeLog(__func__,"ini file",INFO,"MaxLogFileLines is %i",maxLogFileLines);
 	writeLog(__func__,"ini file",INFO,"MaxAuditFileLines is %i",maxAuditFileLines);
 	writeLog(__func__,"ini file",INFO,"WriteAuditFiles is %i",writeAuditFiles);
+	writeLog(__func__,"ini file",INFO,"AuditFilePath is %s",auditFilePath);
 	writeLog(__func__,"ini file",INFO,"LockDelay is %i",lockDelay);
 	writeLog(__func__,"ini file",INFO,"AutoLock is %i",autoLock);
     loadFilters();
