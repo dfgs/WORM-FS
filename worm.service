@@ -1,0 +1,12 @@
+[Unit]
+Description=WORM service
+#Requires=iscsi.service
+#After=iscsi.service
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/worm -o allow_other,default_permissions
+ExecStop=fusermount -u /mnt/WORM
+
+[Install]
+WantedBy=multi-user.target
