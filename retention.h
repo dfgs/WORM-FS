@@ -8,15 +8,8 @@
 
 
 
-struct Filter
-{
-	regex_t regex;
-	unsigned short value;
-};
 
-extern unsigned short defaultRetention;
-extern int filtersCount;
-extern struct Filter *filters;
+
 
 
 unsigned short getParentRetention(const char* funcName,const char *path);

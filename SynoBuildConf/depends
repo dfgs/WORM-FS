@@ -1,0 +1,7 @@
+# Copyright (C) 2000-2016 Synology Inc. All rights reserved.
+[BuildDependent]
+libini
+liblog
+
+[default]
+all="6.0"

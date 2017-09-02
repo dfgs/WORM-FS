@@ -1,0 +1,13 @@
+#!/bin/sh
+# Copyright (C) 2000-2016 Synology Inc. All rights reserved.
+
+### This script will be executed when package uninstalled and upgraded.
+### Actions after package uninstalled.
+### ex. remove garbage files.
+
+rm -f /usr/local/bin/worm
+rm -f /etc/worm.conf
+rm -f /etc/logrotate.d/wormrotate
+
+
+exit 0

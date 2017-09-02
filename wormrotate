@@ -1,0 +1,22 @@
+/var/log/worm.log {
+    rotate 10
+    missingok
+    notifempty
+    daily
+    sharedscripts
+    postrotate
+        pkill -SIGUSR1 worm
+    endscript
+}
+
+/var/log/worm_audit.log {
+    rotate 10
+    missingok
+    notifempty
+    daily
+    sharedscripts
+    postrotate
+        pkill -SIGUSR2 worm
+    endscript
+}
+

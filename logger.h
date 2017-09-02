@@ -2,9 +2,10 @@
 #define _Logger_
 
 #include <limits.h>
+#include <log.h>
+#include <mqueue.h>
 
 //extern int MaxLinesInLogFiles;
-
 
 extern const char* DEBUG;
 extern const char* INFO;
@@ -32,36 +33,26 @@ extern const char* TIME;
 extern const char* LOCATION;
 extern const char* ATTRIBUTE;
 
-extern unsigned char ID;
-extern int maxLogFileLines;
-extern int maxAuditFileLines;
-extern int writeAuditFiles;
-extern int lockDelay;
-extern int autoLock;
-extern char* auditFilePath;
+typedef struct
+{
+	LogFile* logFile;
+	LogFile* auditFile;
+	mqd_t auditQueue;
+} Logger;
 
-extern char auditFileName[PATH_MAX];
-extern char logFileName[PATH_MAX];
 
-//void StartAuditTimer();
-//void StopAuditTimer();
-void initLog(void);
-void disposeLog(void);
-void renameLog(void);
-void openLog(void);
-void closeLog(void);
+extern void (*writeAudit)(const char*,const char*,const char* ,const char* ,const char*);
 
-void logEnter(const char *funcName,const char* path);
-void writeLog(const char* funcName,const char* path,const char *errorLevel,const char *format, ...);
-int writeErrorNumber(const char* funcName,const char* path);
 
-//void writeLogHeader();
+int logger_init(void);
+void logger_free(void);
 
-void openAudit(void);
-void closeAudit(void);
-void renameAudit(void);
-void writeAudit(const char *action,const char *entity,const char* result,const char* path,const char *value);
-void auditSuccess(const char *action,const char *entity,const char* path,const char *format, ...);
-void auditFailure(const char *action,const char *entity,const char* path,const char *format, ...);
+void logger_enter(const char *funcName,const char* path);
+void logger_log(const char* funcName,const char* path,const char* errorLevel,const char *format, ...);
+int logger_errno(const char* funcName,const char* path,const char* message);
+
+//void writeAudit(const char *action,const char *entity,const char* result,const char* path,const char *value);
+void logger_auditSuccess(const char *action,const char *entity,const char* path,const char *format, ...);
+void logger_auditFailure(const char *action,const char *entity,const char* path,const char *format, ...);
 
 #endif

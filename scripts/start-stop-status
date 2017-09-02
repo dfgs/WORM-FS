@@ -1,0 +1,31 @@
+#!/bin/sh
+# Copyright (C) 2000-2016 Synology Inc. All rights reserved.
+
+case $1 in
+	start)
+		### Start this package.
+		/usr/local/bin/worm -o allow_other,default_permissions >> /var/log/worm.log 2>&1
+		exit $?
+	;;
+	stop)
+		### Stop this package.
+		fusermount -u /volume1/WORM >> /var/log/worm.log 2>&1
+		exit $?
+	;;
+	status)
+		### Check package alive.
+		ps cax | grep worm > /dev/null
+		if [ $? -eq 0 ]; then
+		  exit 0
+		else
+		  exit 3
+		fi
+	;;
+	killall)
+        ;;
+	log)
+		echo /var/log/worm.log
+		exit 0
+	;;
+esac
+

@@ -14,14 +14,14 @@ int WORM_readlink(const char *path, char *link, size_t size)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    logger_enter(__func__,path);
     convertPath(convertedPath, path);
 
-    writeLog(__func__, path,INFO, "Try to read link");
+    logger_log(__func__, path,INFO, "Try to read link");
     returnStatus = readlink(convertedPath, link, size - 1);
     if (returnStatus < 0)
     {
-       returnStatus = writeErrorNumber(__func__, path);
+       returnStatus = logger_errno(__func__, path,"Failed to read link");
 	}
     else
     {
@@ -39,27 +39,27 @@ int WORM_unlink(const char *path)
     int returnStatus = 0;
     char convertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    logger_enter(__func__,path);
     convertPath(convertedPath, path);
 
-    writeLog(__func__,path,INFO,"Checking expiration");
+    logger_log(__func__,path,INFO,"Checking expiration");
     if (isExpired(__func__,convertedPath) == 0)
     {
-        writeLog(__func__,path,WARN, "Media is not expired");
-		auditFailure(DELETE,cFILE,path,NOTEXPIRED);
+        logger_log(__func__,path,WARN, "Media is not expired");
+		logger_auditFailure(DELETE,cFILE,path,NOTEXPIRED);
 		return -EACCES;
 	}
 
-    writeLog(__func__, path,INFO, "Try to unlink target");
+    logger_log(__func__, path,INFO, "Try to unlink target");
     returnStatus = unlink(convertedPath);
     if (returnStatus != 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
-		auditFailure(DELETE,cFILE,path,NOK);
+        returnStatus = logger_errno(__func__, path,"Failed to unlink target");
+		logger_auditFailure(DELETE,cFILE,path,NOK);
 	}
 	else
 	{
-		auditSuccess(DELETE,cFILE,path,OK);
+		logger_auditSuccess(DELETE,cFILE,path,OK);
 	}
 
     return returnStatus;
@@ -74,12 +74,12 @@ int WORM_symlink(const char *path, const char *link)
     int returnStatus = 0;
     char linkPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    logger_enter(__func__,path);
     convertPath(linkPath, link);
 
-    writeLog(__func__, path,INFO, "Try to create link");
+    logger_log(__func__, path,INFO, "Try to create link");
     returnStatus = symlink(path, linkPath);
- 	if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, link);
+ 	if (returnStatus != 0) returnStatus = logger_errno(__func__, link,"Failed to create link");
 
     return returnStatus;
 }
@@ -89,13 +89,13 @@ int WORM_link(const char *path, const char *newpath)
     int returnStatus = 0;
     char convertedPath[PATH_MAX], newConvertedPath[PATH_MAX];
 
-    logEnter(__func__,path);
+    logger_enter(__func__,path);
  	convertPath(convertedPath, path);
     convertPath(newConvertedPath, newpath);
 
-    writeLog(__func__, path,INFO, "Try to create link");
+    logger_log(__func__, path,INFO, "Try to create link");
     returnStatus = link(convertedPath, newConvertedPath);
-    if (returnStatus != 0) returnStatus = writeErrorNumber(__func__, path);
+    if (returnStatus != 0) returnStatus = logger_errno(__func__, path,"Failed to create link");
 
 
     return returnStatus;

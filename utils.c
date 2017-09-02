@@ -1,6 +1,3 @@
-#include "utils.h"
-#include "logger.h"
-#include "retention.h"
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
@@ -12,11 +9,15 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <dirent.h>
-
+#include "utils.h"
+#include "logger.h"
+#include "retention.h"
+#include "context.h"
+#include "config.h"
 
 void convertTime(time_t time,char *buffer,int bufferSize)
 {
-    struct stat info;
+   // struct stat info;
     struct tm * timeinfo;
 
     timeinfo = localtime(&time);
@@ -26,7 +27,7 @@ void convertTime(time_t time,char *buffer,int bufferSize)
 void convertPath(char *destPath, const char *originalPath)
 {
 	//logEnter("convertPath");
-    strcpy(destPath, repositoryPath);
+    strcpy(destPath, config.repositoryPath);
     strncat(destPath, originalPath, PATH_MAX); // ridiculously long paths will break here
 
     //writeLog("Convert path",originalPath,DEBUG, "convertPath:  rootdir = %s, original path = %s, converted path = %s",repositoryPath, originalPath, destPath);
@@ -37,12 +38,12 @@ void setRealOwnerID(const char* funcName,const char *path)
 	int returnStatus;
 
 	struct fuse_context *context;
-    logEnter(__func__,path);
+    logger_enter(__func__,path);
 	
 	context=fuse_get_context();
-	writeLog(funcName,path,DEBUG,"Try to update fs entry owner from pid=%i to uid=%i/gid=%i",context->pid, context->uid,context->gid);
+	logger_log(funcName,path,DEBUG,"Try to update fs entry owner from pid=%i to uid=%i/gid=%i",context->pid, context->uid,context->gid);
 	returnStatus=chown(path,context->uid,context->gid);
-	if (returnStatus<0) returnStatus = writeErrorNumber(__func__, path);
+	if (returnStatus<0) returnStatus = logger_errno(__func__, path,"Failed to update fs entry owner");
 
 }
 
@@ -65,7 +66,7 @@ int isReadOnly(const char *path)
     returnStatus = lstat(path, &statbuf);
     if (returnStatus != 0)
     {
-        returnStatus = writeErrorNumber(__func__, path);
+        returnStatus = logger_errno(__func__, path,"Failed to get read only status");
         return 0;
     }
     return  (statbuf.st_mode & (S_IWUSR  | S_IWGRP | S_IWOTH))==0;
@@ -99,6 +100,6 @@ int createDirectory(const char* funcName,const char *path)
 	int returnStatus;
 
 	returnStatus = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	if (returnStatus != 0) returnStatus = writeErrorNumber(funcName, path);
+	if (returnStatus != 0) returnStatus = logger_errno(funcName, path,"Failed to create directory");
 	return returnStatus;
 }

@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <sys/mount.h>
+#include <ini.h>
 #include "logger.h"
 #include "retention.h"
 #include "directory.h"
@@ -29,129 +30,53 @@
 #include "link.h"
 #include "shared.h"
 #include "file.h"
-#include "inifile.h"
+#include "loop.h"
+#include "context.h"
+#include "config.h"
 
-static const char* _VERSION="0001";
-static SectionDictionary *ini;
-
-char **newArgs;
+Loop* loopDevice;
 
 
-static void read_Conf()
+static void freeResources()
 {
-    ini = open_ini("/etc/worm.conf");
-    if (ini==NULL)
-    {
-		perror("Failed to open configuration file");
-		exit(EXIT_FAILURE);
-    }
-
-
-    ID = ini_getInt(ini, "General","ID", 1);
-    mountPath=ini_getString(ini,"General","MountPath","/mnt/WORM");
-    repositoryPath=ini_getString(ini,"General","RepositoryPath","/tmp");
-    defaultRetention = ini_getInt(ini, "General","DefaultRetention", 0);
-    lockDelay = ini_getInt(ini, "General","LockDelay", 300);
-    autoLock = ini_getInt(ini, "General","AutoLock", 0);
-    maxLogFileLines = ini_getInt(ini, "Logs","MaxLogFileLines", 100);
-
-    writeAuditFiles=ini_getInt(ini,"Audit","WriteAuditFiles",0);
-    maxAuditFileLines = ini_getInt(ini, "Audit","MaxAuditFileLines", 100);
-    auditFilePath=ini_getString(ini,"Audit","AuditFilePath","/var/log");
-
-	sprintf(auditFileName,"%s/WORM_Audit.log",auditFilePath);
-	strcpy(logFileName,"/var/log/WORM.log");
-
-
-}
-static void free_Conf()
-{
-    free_ini(ini);
-}
-
-static void loadFilters()
-{
-	char* pattern;
-	int value;
-	int result;
-    Section* section;
-    int index;
-    KeyValuePair keyValuePair;
-
-	logEnter(__func__,"ini file");
-
-    section=ini_getSection(ini,"Retention");
-    filters=malloc(sizeof(struct Filter)*section->count);
-
-
-    filtersCount=0;
-	writeLog(__func__, "ini file",INFO,"Parsing WORM filter rules");
-    for(index=0;index<section->count;index++)
-    {
-        keyValuePair=section->items[index];
-        pattern=keyValuePair.key;
-        value=ini_getUnsignedShort(ini,"Retention", pattern, 0);
-
-        // need to extract rule freom key
-
-		writeLog(__func__, "ini file",INFO,"Compiling filter rule: %s %i",pattern,value);
-		filters[filtersCount].value=value;
-		result=regcomp(&filters[filtersCount].regex,pattern,REG_ICASE|REG_NOSUB|REG_NEWLINE|REG_EXTENDED);
-		if (result!=0)
-		{
-			writeLog(__func__, "ini file",ERROR,"Invalid filter regex pattern %s",pattern);
-		} else filtersCount++;
-    }
- 	writeLog(__func__, "ini file",INFO,"Filters count=%i",filtersCount);
-
-
+	logger_log(__func__, NAFILE,INFO,"Releasing resources");
+	
+	if (loopDevice!=NULL)
+	{
+		loop_umount(loopDevice);
+		loop_free(loopDevice);
+	}
+	
+	config_free();
+	logger_free();
+    
 }
 
 static void *WORM_init(struct fuse_conn_info *conn)
 {
-	initLog();
-	openLog();
-	openAudit();
+	logger_enter(__func__,NAFILE);
 
-	logEnter(__func__,"ini file");
-
-	writeLog(__func__,"ini file",INFO,"ID is %i",ID);
-	writeLog(__func__,"ini file",INFO,"Mount path is %s",mountPath);
-	writeLog(__func__,"ini file",INFO,"Repository path is %s",repositoryPath);
-	writeLog(__func__,"ini file",INFO,"DefaultRetention is %i",defaultRetention);
-	writeLog(__func__,"ini file",INFO,"MaxLogFileLines is %i",maxLogFileLines);
-	writeLog(__func__,"ini file",INFO,"MaxAuditFileLines is %i",maxAuditFileLines);
-	writeLog(__func__,"ini file",INFO,"WriteAuditFiles is %i",writeAuditFiles);
-	writeLog(__func__,"ini file",INFO,"AuditFilePath is %s",auditFilePath);
-	writeLog(__func__,"ini file",INFO,"LockDelay is %i",lockDelay);
-	writeLog(__func__,"ini file",INFO,"AutoLock is %i",autoLock);
-    loadFilters();
-
-
-    return NULL;
+	logger_log(__func__,NAFILE,DEBUG,"ID is %i",config.ID);
+	logger_log(__func__,NAFILE,DEBUG,"Mount path is %s",config.mountPath);
+	logger_log(__func__,NAFILE,DEBUG,"Repository type is %i",config.repositoryType);
+	logger_log(__func__,NAFILE,DEBUG,"Repository path is %s",config.repositoryPath);
+	logger_log(__func__,NAFILE,DEBUG,"Repository file is %s",config.repositoryFile);
+	logger_log(__func__,NAFILE,DEBUG,"DefaultRetention is %i",config.defaultRetention);
+	logger_log(__func__,NAFILE,DEBUG,"Audit mode is %i",config.auditMode);
+	logger_log(__func__,NAFILE,DEBUG,"LockDelay is %i",config.lockDelay);
+	logger_log(__func__,NAFILE,DEBUG,"AutoLock is %i",config.autoLock);
+     
 }
+
+
 
 static void WORM_destroy(void *userdata)
 {
-	int index=0;
-
-    logEnter(__func__,"ini file");
-
-	writeLog(__func__, "ini file",INFO,"Releasing WORM filters");
-	for(index=0;index<filtersCount;index++)
-	{
-		regfree(&filters[index].regex);
-	}//*/
-	free(filters);
-
-	closeAudit();
-	closeLog();
-	disposeLog();
-
-    free(newArgs);
-    free_Conf();
-
+    logger_enter(__func__,NAFILE);
+	freeResources();
 }
+
+
 
 static struct fuse_operations WORM_oper =
 {
@@ -178,10 +103,8 @@ static struct fuse_operations WORM_oper =
 	.getattr = WORM_getattr,
 	.getxattr = WORM_getxattr,
 	.listxattr = WORM_listxattr,
-
 	.setxattr = WORM_setxattr,
 	.removexattr = WORM_removexattr,
-
 	.opendir = WORM_opendir,
 	.readdir = WORM_readdir,
 	.releasedir = WORM_releasedir,
@@ -199,7 +122,15 @@ static struct fuse_operations WORM_oper =
 
 int main(int argc, char *argv[])
 {
+	char* newargs[128];
 	int result;
+
+	
+	if (argc==128)
+	{
+		fprintf(stderr,"Too many arguments\n");
+		return -1;
+	}
 
  	if ((argc ==2) && (strcmp(argv[1],"-h")==0))
 	{
@@ -208,13 +139,51 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	read_Conf();
+	if (config_init()!=0)
+	{
+		fprintf(stderr,"Cannot initialize configuration\n");
+		freeResources();
+		return -1;
+	}
+	if (logger_init()!=0)
+	{
+		fprintf(stderr,"Cannot initialize logger\n");
+		freeResources();
+		return -1;
+	}
+	if (config_loadFilters()!=0)
+	{
+		fprintf(stderr,"Cannot initialize filters\n");
+		freeResources();
+		return -1;
+	}
+	
+	if (config.repositoryType==1)
+	{
+	
+		loopDevice=loop_create(config.repositoryFile,config.repositoryPath);
+		if (loopDevice==NULL)
+		{
+			fprintf(stderr,"Cannot initialize loop device\n");
+			freeResources();
+			return -1;
+		}
+		if (loop_mount(loopDevice)!=0)
+		{
+			fprintf(stderr,"Cannot mount loop device\n");
+			freeResources();
+			return -1;
+		}
+	}
+		
+	
+    memcpy(newargs, argv, argc*sizeof(char*));
+    newargs[argc]=config.mountPath;
 
-    newArgs=malloc((argc+1)*sizeof(char*));
-    memcpy(newArgs, argv, argc*sizeof(char*));
-    newArgs[argc]=mountPath;
+	//printf("Calling fuse main...\n");
+	result = fuse_main(argc+1, newargs, &WORM_oper, NULL);
 
-	result = fuse_main(argc+1, newArgs, &WORM_oper, NULL);
+	if (result!=0) fprintf(stderr,"fuse main returned an error %i\n",result);
 
 	return result;
 }

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Copyright (C) 2000-2016 Synology Inc. All rights reserved.
+
+### This script will be executed when package installed and upgraded.
+### Actions after package installed.
+### ex. create database, create symbolic link...
+
+ln -sf $SYNOPKG_PKGDEST/usr/local/bin/worm /usr/local/bin/
+ln -sf $SYNOPKG_PKGDEST/etc/worm.conf /etc
+ln -sf $SYNOPKG_PKGDEST/etc/logrotate.d/wormrotate /etc/logrotate.d
+sed -i "s~/mnt/WORM~$sharedPath~g" $SYNOPKG_PKGDEST/etc/worm.conf
+mkdir -p $sharedPath
+exit 0
